@@ -104,3 +104,26 @@ func TestGroupRootAndDuplicate(t *testing.T) {
 	}()
 	app.Get("/api", func(http.ResponseWriter, *http.Request) {})
 }
+
+func TestRoutesSnapshot(t *testing.T) {
+	app := New()
+	app.Get("/users", func(http.ResponseWriter, *http.Request) {})
+	app.Group("/api").Post("/users", func(http.ResponseWriter, *http.Request) {})
+	routes := app.Routes()
+	if len(routes) != 2 {
+		t.Fatal(routes)
+	}
+	found := false
+	for _, route := range routes {
+		if route.Method == "POST" && route.Path == "/api/users" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal(routes)
+	}
+	routes[0].Path = "changed"
+	if app.Routes()[0].Path == "changed" {
+		t.Fatal("snapshot mutated router")
+	}
+}

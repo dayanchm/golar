@@ -1,0 +1,30 @@
+package tests
+
+import (
+ "net/http/httptest"
+ "testing"
+ "{{.Module}}/internal/bootstrap"
+)
+
+func TestHealth(t *testing.T) {
+ app,err:=bootstrap.New();if err!=nil{t.Fatal(err)}
+ rec:=httptest.NewRecorder()
+ app.ServeHTTP(rec,httptest.NewRequest("GET","/health",nil))
+ if rec.Code!=200||rec.Body.String()!=`{"status":"ok"}`{t.Fatalf("response = %d %q",rec.Code,rec.Body.String())}
+}
+func TestAPIGreeting(t *testing.T) {
+{{if eq .Auth "token"}} t.Setenv("AUTH_TOKEN","test-token"){{end}}
+ app,err:=bootstrap.New();if err!=nil{t.Fatal(err)}
+ request:=httptest.NewRequest("GET","/api/hello",nil)
+{{if eq .Auth "token"}} request.Header.Set("Authorization","Bearer test-token"){{end}}
+ rec:=httptest.NewRecorder();app.ServeHTTP(rec,request)
+ if rec.Code!=200{t.Fatalf("status = %d",rec.Code)}
+}
+{{if eq .Auth "token"}}
+func TestUnauthorized(t *testing.T) {
+ t.Setenv("AUTH_TOKEN","test-token")
+ app,err:=bootstrap.New();if err!=nil{t.Fatal(err)}
+ rec:=httptest.NewRecorder();app.ServeHTTP(rec,httptest.NewRequest("GET","/api/hello",nil))
+ if rec.Code!=401||rec.Header().Get("WWW-Authenticate")!="Bearer"{t.Fatalf("response = %d %v",rec.Code,rec.Header())}
+}
+{{end}}

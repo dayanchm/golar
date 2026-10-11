@@ -1,0 +1,73 @@
+# {{.Name}}
+
+Golar {{.Template}} starter. Go 1.27 or newer is required.
+
+```sh
+go mod tidy
+go test ./...
+golar serve
+```
+
+Without the CLI: `go run ./cmd/server`. The backend defaults to :8080.
+`golar routes` lists actual registered routes; `golar doctor` checks project tools
+and files. `golar serve --addr :9000` overrides the address. Stop with Ctrl+C.
+
+Folders: app/handlers, app/models, routes, internal/bootstrap, internal/config,
+database/migrations, storage and tests. Add handlers in app/handlers and register
+them in routes/routes.go. This starter has /, /health and /api/hello.
+
+Configuration uses .env, with existing process variables taking precedence.
+Do not commit .env. .env.example has no authentication secret.
+golar.yaml is a flat key: value manifest; strings may be quoted. Nested YAML,
+anchors and multiline values are not supported. It stores scaffolding choices,
+not secrets. JSON manifests are also accepted.
+{{if .FrameworkDir}}
+This project uses a local Golar replacement: {{.FrameworkDir}}. For distribution,
+remove the replace directive and require a published Golar version.
+{{end}}
+{{if ne .Database "none"}}
+## Database
+
+{{.Database}} uses database/sql with the {{.Driver}} driver. DATABASE_DSN configures
+the connection. Startup pings the database; shutdown closes it. The starter does
+not add an ORM or run migrations automatically. Put migrations in database/migrations.
+{{if ne .Database "sqlite"}}Start the database and set DATABASE_DSN before serving.{{end}}
+{{end}}
+{{if eq .Auth "token"}}
+## Authentication
+
+/api routes require `Authorization: Bearer <AUTH_TOKEN>`. A random token was
+written to .env. This is shared-token authentication, not user registration,
+password login or JWT. Set a fresh token when deploying; an empty token rejects
+API requests with 503. /health and the homepage remain public.
+{{end}}
+{{if ne .Frontend "none"}}
+## Frontend
+
+{{.Frontend}} uses Vite. Requires Node 20.19+ or 22.12+ (Node 24 recommended).
+
+```sh
+cd frontend
+npm install
+npm run dev
+```
+
+Vite proxies /api and /health to http://localhost:8080. Set GOLAR_BACKEND_URL in
+the frontend process to change the proxy target. For token authentication, the
+frontend page asks for the token; it stays in component memory, not localStorage.
+`npm run build` creates frontend/dist; the Go backend serves it in production.
+Frontend HTML and assets are served by middleware and do not appear in the route list.
+{{end}}
+{{if .Docker}}
+## Docker
+
+```sh
+go mod tidy
+go mod vendor
+docker compose up --build
+```
+
+Vendoring supports both published and local framework dependencies. Commit vendor
+if your build pipeline needs to build without Go module downloads.
+Compose database passwords are local development defaults; change them for deployment.
+{{end}}

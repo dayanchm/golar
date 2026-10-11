@@ -1,0 +1,20 @@
+package main
+
+import (
+ "flag"
+ "fmt"
+ "log"
+ "os"
+ "{{.Module}}/internal/bootstrap"
+)
+
+func main() {
+ list:=flag.Bool("routes",false,"list registered routes without starting the server")
+ addr:=flag.String("addr","","override listen address")
+ flag.Parse()
+ app,err:=bootstrap.New();if err!=nil{log.Fatal(err)}
+ if *list {for _,route:=range app.Routes(){fmt.Printf("%s\t%s\n",route.Method,route.Path)};return}
+ address:=os.Getenv("APP_ADDR");if address==""{address=":8080"};if *addr!=""{address=*addr}
+ log.Printf("{{.Name}} listening on %s",address)
+ if err=app.Run(address);err!=nil{log.Fatal(err)}
+}

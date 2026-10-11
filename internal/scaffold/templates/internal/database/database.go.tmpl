@@ -1,0 +1,19 @@
+package database
+
+import (
+ "context"
+ "os"
+ golarDB "github.com/dayanchm/golar/database"
+)
+
+type DB = golarDB.DB
+func Open(ctx context.Context) (*DB,error) {
+ config,err:=golarDB.ConfigFromLookup(func(key string)(string,bool){
+  value,ok:=os.LookupEnv(key)
+  if key=="DB_DRIVER"&&!ok{return "{{.Database}}",true}
+  if key=="DB_DATABASE"&&!ok{return {{if eq .Database "sqlite"}}{{quote .DSN}}{{else}}"golar"{{end}},true}
+  return value,ok
+ });if err!=nil{return nil,err}
+ if err=ctx.Err();err!=nil{return nil,err}
+ return golarDB.ConnectContext(ctx,config)
+}

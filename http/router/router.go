@@ -17,6 +17,21 @@ type Route struct {
 	Handler http.HandlerFunc
 }
 
+// RouteInfo describes a registered route without exposing its handler.
+type RouteInfo struct {
+	Method string
+	Path   string
+}
+
+// Routes returns an independent snapshot. Call after registration is complete.
+func (r *Router) Routes() []RouteInfo {
+	routes := make([]RouteInfo, len(r.routes))
+	for i, route := range r.routes {
+		routes[i] = RouteInfo{Method: route.Method, Path: route.Path}
+	}
+	return routes
+}
+
 type Router struct {
 	routes      []Route
 	handler     http.Handler

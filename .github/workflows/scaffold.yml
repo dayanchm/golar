@@ -1,0 +1,69 @@
+name: Scaffold CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  scaffold:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - template: api
+            frontend: none
+            database: sqlite
+          - template: web
+            frontend: none
+            database: postgres
+          - template: fullstack
+            frontend: react
+            database: none
+          - template: fullstack
+            frontend: vue
+            database: mysql
+          - template: fullstack
+            frontend: svelte
+            database: none
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v7
+        if: matrix.frontend != 'none'
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Build CLI and generate project
+        env:
+          PROJECT_TEMPLATE: ${{ matrix.template }}
+          PROJECT_FRONTEND: ${{ matrix.frontend }}
+          PROJECT_DATABASE: ${{ matrix.database }}
+        run: |
+          go build -o "$RUNNER_TEMP/golar" ./cmd/golar
+          "$RUNNER_TEMP/golar" new demo --dir "$RUNNER_TEMP" --no-interactive \
+            --template "$PROJECT_TEMPLATE" --frontend "$PROJECT_FRONTEND" \
+            --database "$PROJECT_DATABASE" --auth token --docker \
+            --framework-dir "$GITHUB_WORKSPACE"
+      - name: Test generated Go project
+        run: |
+          cd "$RUNNER_TEMP/demo"
+          go mod tidy
+          go vet ./...
+          go test -race ./...
+          go build ./cmd/server
+          "$RUNNER_TEMP/golar" routes
+          go mod vendor
+          docker compose config --quiet
+      - name: Build generated frontend
+        if: matrix.frontend != 'none'
+        run: |
+          cd "$RUNNER_TEMP/demo/frontend"
+          npm install --no-audit --no-fund
+          npm run build

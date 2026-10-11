@@ -2,6 +2,88 @@
 
 > A modern, modular, AI-native full-stack framework for Go, inspired by Laravel's developer experience.
 
+## CLI and project scaffolding (v0.2.0)
+
+Install the CLI from this checkout:
+
+```sh
+go install ./cmd/golar
+```
+
+Ensure `$(go env GOPATH)/bin` is on your PATH. Alternatively, run
+`go run ./cmd/golar help` from this repository.
+
+```sh
+golar new my-app --interactive
+# Or use flags without prompts:
+golar new my-api --no-interactive --template api --database sqlite --auth token
+cd my-api
+go mod tidy
+golar routes
+golar doctor
+golar serve --addr :8080
+```
+
+| Option | Choices | Default |
+| --- | --- | --- |
+| `--template` | `api`, `web`, `fullstack` | `api` |
+| `--database` | `none`, `sqlite`, `postgres`, `mysql` | `none` |
+| `--frontend` | `none`, `react`, `vue`, `svelte` | `react` for Full Stack; otherwise `none` |
+| `--auth` | `none`, `token` | `none` |
+| `--docker` | boolean | false |
+| `--module` | Go module path | project name |
+| `--dir` | parent directory for new; project directory for other commands | current directory |
+
+API projects have no frontend; Full Stack requires one. Web defaults to embedded
+server-rendered HTML and can also include a frontend. Frontends use
+[Vite](https://vite.dev/guide/) with a development proxy to the backend and
+production assets served by Go. In `frontend`, run `npm install` and
+`npm run dev`; `npm run build` creates production assets. Node 24 is recommended.
+
+The installer prompts on a terminal, or explicitly with `--interactive`.
+`--no-interactive` / `--yes` uses defaults and flags, suitable for scripts.
+Generation renders and validates all files first and rejects every existing
+destination, including empty directories and symlinks. It creates `go.mod`,
+`.env` (permissions 0600), `.env.example`, `golar.yaml`, handlers, models,
+routes, bootstrap/config, migration/storage folders and runnable tests.
+It does not automatically download dependencies or initialize Git.
+
+`golar serve` builds a temporary executable, forwards cancellation for graceful
+shutdown and removes the executable afterwards. It has no hot reload yet.
+`golar routes` reads the application's actual registered routes without running
+startup hooks. `golar doctor` checks project files, Go dependencies, tool versions,
+frontend installation, auth configuration and Docker readiness where selected;
+it exits nonzero when checks fail. Use `--dir` outside the project directory.
+
+The flat `golar.yaml` manifest records scaffolding choices and the default address.
+`.env` and process variables configure runtime values; process values take
+precedence, and `serve --addr` takes precedence over both. Changing template,
+database or frontend in the manifest does not regenerate an existing project.
+The manifest supports flat scalars and JSON, not nested YAML or anchors.
+
+Database starters use `database/sql`, ping on startup and close on shutdown.
+SQLite creates its database file; PostgreSQL and MySQL require running services.
+Set `DATABASE_DSN` in `.env`. No ORM or automatic migration runner is included.
+Token auth protects `/api` using a random shared bearer token stored only in
+`.env`; it does not provide user accounts, password login or JWT.
+
+With Docker selected, run `go mod tidy && go mod vendor`, then
+`docker compose up --build`. Docker builds use vendored Go modules, including
+local framework dependencies. Compose includes a database service for PostgreSQL
+or MySQL and persistent storage for SQLite. Database credentials in Compose are
+development defaults.
+
+During development the CLI detects its local Golar source tree and adds a
+`replace` directive. Use `--framework-dir /path/to/golar` explicitly when needed.
+For a published release use `--framework-version v0.2.0` instead. This version
+must be tagged and published before remote-only installation works; generation
+does not publish framework releases. Remove local replacements before distributing
+a project outside your machine.
+
+Scaffold tests exercise every option combination and compile/test generated API,
+Web and Full Stack projects. `.github/workflows/scaffold.yml` additionally checks
+database starters, all three frontend builds and Compose configuration in CI.
+
 ## Quick start
 
 Requires Go 1.27 or newer.
@@ -166,3 +248,42 @@ These are the default timeouts. Cancel the supplied context to initiate
 shutdown programmatically. A server instance supports one serving lifecycle.
 Graceful shutdown waits for HTTP requests; hijacked connections such as
 WebSockets need their own shutdown handling.
+
+## Database and migrations (v0.3.0)
+
+Reinstall the updated CLI from this checkout: `go install ./cmd/golar`.
+
+```sh
+golar new database-app --no-interactive --database sqlite
+cd database-app
+golar make:migration create_users_table
+go mod tidy
+golar migrate
+golar migrate:status
+golar migrate:rollback
+```
+
+Also available: migrate:reset, migrate:refresh and migrate --pretend. Generated
+migrations register through Go init functions and implement Up/Down with Golar's
+schema builder. Dry run prints all registered migrations without opening a database;
+metadata-dependent operations return explicit offline errors.
+
+The database package provides validated DB_* configuration, SQLite/PostgreSQL/MySQL
+connections, pooling, named connections, context-aware raw SQL and panic-safe
+transactions. Schema supports tables, columns, indexes, foreign keys, native alters
+and SQLite rebuilds. Migration runners hold database locks, track batches and stop
+on failure; MySQL partial DDL leaves a durable marker requiring manual repair.
+
+See [configuration](docs/database/configuration.md),
+[connections](docs/database/connections.md), [migrations](docs/database/migrations.md),
+[schema builder](docs/database/schema-builder.md) and
+[transactions](docs/database/transactions.md). Run the complete SQLite example with
+`go run ./examples/database`; it uses and cleans up a temporary database.
+
+New database-enabled scaffolds use the framework database package. Existing projects
+can continue with DATABASE_DSN and their existing startup code; generated migrations
+use the new package through the local framework replacement. The default scaffold
+framework version is v0.3.0, which requires publishing a tag for remote-only installs.
+
+Database CI runs real SQLite, PostgreSQL and MySQL migration/transaction/foreign-key
+tests with race detection against isolated test databases.

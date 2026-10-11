@@ -42,6 +42,7 @@ func New(configs ...Config) *Application {
 }
 
 func (a *Application) ServeHTTP(w http.ResponseWriter, r *http.Request) { a.router.ServeHTTP(w, r) }
+func (a *Application) Routes() []router.RouteInfo                       { return a.router.Routes() }
 func (a *Application) Use(middlewares ...middleware.Middleware)         { a.router.Use(middlewares...) }
 func (a *Application) SetErrorHandler(handler ErrorHandler) {
 	if handler == nil {

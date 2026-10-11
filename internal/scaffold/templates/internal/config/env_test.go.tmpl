@@ -1,0 +1,22 @@
+package config
+
+import (
+ "os"
+ "path/filepath"
+ "testing"
+)
+func TestLoadEnv(t *testing.T) {
+ t.Setenv("GOLAR_TEST_VALUE","process")
+ path:=filepath.Join(t.TempDir(),".env")
+ if err:=os.WriteFile(path,[]byte("GOLAR_TEST_VALUE=file\n"),0600);err!=nil{t.Fatal(err)}
+ if err:=LoadEnv(path);err!=nil{t.Fatal(err)}
+ if os.Getenv("GOLAR_TEST_VALUE")!="process"{t.Fatal("process environment overwritten")}
+ if err:=LoadEnv(filepath.Join(t.TempDir(),"missing"));err!=nil{t.Fatal(err)}
+}
+func TestInvalidEnv(t *testing.T) {
+ for _,body:=range []string{"invalid", "BAD-KEY=value", `VALUE="unterminated`, "VALUE='unterminated"} {
+  path:=filepath.Join(t.TempDir(),".env")
+  if err:=os.WriteFile(path,[]byte(body),0600);err!=nil{t.Fatal(err)}
+  if err:=LoadEnv(path);err==nil{t.Errorf("accepted %q",body)}
+ }
+}

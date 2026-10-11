@@ -1,0 +1,26 @@
+package auth
+
+import (
+ "crypto/sha256"
+ "crypto/subtle"
+ "net/http"
+ "os"
+ "strings"
+ "github.com/dayanchm/golar"
+)
+
+// Middleware protects /api routes with a shared bearer token, not user sessions.
+func Middleware() golar.Middleware {
+ return func(next http.Handler) http.Handler {
+  return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+   if r.URL.Path!="/api"&&!strings.HasPrefix(r.URL.Path,"/api/"){next.ServeHTTP(w,r);return}
+   token:=os.Getenv("AUTH_TOKEN")
+   if token==""{http.Error(w,"Authentication is not configured",503);return}
+   value:=r.Header.Get("Authorization")
+   if !strings.HasPrefix(value,"Bearer "){w.Header().Set("WWW-Authenticate","Bearer");http.Error(w,"Unauthorized",401);return}
+   got,want:=sha256.Sum256([]byte(strings.TrimPrefix(value,"Bearer "))),sha256.Sum256([]byte(token))
+   if subtle.ConstantTimeCompare(got[:],want[:])!=1{w.Header().Set("WWW-Authenticate","Bearer");http.Error(w,"Unauthorized",401);return}
+   next.ServeHTTP(w,r)
+  })
+ }
+}

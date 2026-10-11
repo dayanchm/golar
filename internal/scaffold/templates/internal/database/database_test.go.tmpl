@@ -1,0 +1,14 @@
+package database
+{{if eq .Database "sqlite"}}
+import (
+ "context"
+ "path/filepath"
+ "testing"
+)
+func TestOpen(t *testing.T) {
+ t.Setenv("DATABASE_DSN",filepath.Join(t.TempDir(),"data","app.db"))
+ db,err:=Open(context.Background());if err!=nil{t.Fatal(err)};defer db.Close()
+ var value int
+ if err=db.QueryRow("SELECT 1").Scan(&value);err!=nil||value!=1{t.Fatalf("value=%d error=%v",value,err)}
+}
+{{end}}

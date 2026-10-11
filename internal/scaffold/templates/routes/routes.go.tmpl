@@ -1,0 +1,12 @@
+package routes
+
+import (
+ "github.com/dayanchm/golar"
+ "{{.Module}}/app/handlers"
+)
+
+func Register(app *golar.Application) {
+ app.Get("/",handlers.Home)
+ app.Get("/health",handlers.Health)
+ app.Group("/api").Get("/hello",handlers.Greeting)
+}

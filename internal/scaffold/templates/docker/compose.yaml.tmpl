@@ -1,0 +1,52 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    env_file: .env
+    environment:
+      APP_ADDR: ":8080"
+{{if eq .Database "postgres"}}      DATABASE_DSN: "postgres://golar:golar@db:5432/golar?sslmode=disable"
+    depends_on:
+      db:
+        condition: service_healthy
+{{else if eq .Database "mysql"}}      DATABASE_DSN: "golar:golar@tcp(db:3306)/golar?parseTime=true"
+    depends_on:
+      db:
+        condition: service_healthy
+{{else if eq .Database "sqlite"}}      DATABASE_DSN: "storage/app.db"
+    volumes:
+      - app-storage:/app/storage
+{{end}}
+{{if eq .Database "postgres"}}  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: golar
+      POSTGRES_PASSWORD: golar
+      POSTGRES_DB: golar
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U golar"]
+      interval: 5s
+      retries: 10
+    volumes:
+      - db-data:/var/lib/postgresql/data
+volumes:
+  db-data:
+{{else if eq .Database "mysql"}}  db:
+    image: mysql:8.4
+    environment:
+      MYSQL_USER: golar
+      MYSQL_PASSWORD: golar
+      MYSQL_DATABASE: golar
+      MYSQL_ROOT_PASSWORD: local-development-only
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD"]
+      interval: 5s
+      retries: 10
+    volumes:
+      - db-data:/var/lib/mysql
+volumes:
+  db-data:
+{{else if eq .Database "sqlite"}}volumes:
+  app-storage:
+{{end}}

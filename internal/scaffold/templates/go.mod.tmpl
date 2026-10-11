@@ -1,0 +1,10 @@
+module {{.Module}}
+
+go 1.27.0
+
+require (
+ github.com/dayanchm/golar {{.FrameworkVersion}}
+)
+{{if .FrameworkDir}}
+replace github.com/dayanchm/golar => {{quote .FrameworkDir}}
+{{end}}

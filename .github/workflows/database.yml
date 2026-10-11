@@ -1,0 +1,63 @@
+name: Database CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  sqlite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: go test -race ./database/...
+      - run: go build ./...
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: golar
+          POSTGRES_PASSWORD: test-only
+          POSTGRES_DB: golar_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U golar -d golar_test"
+          --health-interval 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: go test -race ./database/...
+        env:
+          GOLAR_TEST_DRIVER: postgres
+          GOLAR_TEST_DSN: postgres://golar:test-only@localhost:5432/golar_test?sslmode=disable
+  mysql:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_USER: golar
+          MYSQL_PASSWORD: test-only
+          MYSQL_DATABASE: golar_test
+          MYSQL_ROOT_PASSWORD: root-test-only
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost -proot-test-only"
+          --health-interval 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: go test -race ./database/...
+        env:
+          GOLAR_TEST_DRIVER: mysql
+          GOLAR_TEST_DSN: golar:test-only@tcp(localhost:3306)/golar_test?parseTime=true
