@@ -287,3 +287,11 @@ framework version is v0.3.0, which requires publishing a tag for remote-only ins
 
 Database CI runs real SQLite, PostgreSQL and MySQL migration/transaction/foreign-key
 tests with race detection against isolated test databases.
+
+### Query builder foundation (v0.4.0 development)
+
+`db.Table("users").Select("id", "name").Where("active", "=", true).OrderBy("id", "desc").Limit(20)`
+builds an immutable, parameterized SELECT. Call `Compile()` for SQL and bindings,
+or `QueryContext(ctx)` to scan rows using the existing connection. Transaction
+handles support the same `Table` API. See the [query builder guide](docs/database/query-builder.md)
+for supported operators, identifier rules and resource handling. ORM support remains planned.
