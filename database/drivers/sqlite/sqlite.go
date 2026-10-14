@@ -3,12 +3,13 @@ package sqlite
 import (
 	"database/sql"
 	"fmt"
-	"github.com/dayanchm/golar/database/connection"
-	_ "modernc.org/sqlite"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/dayanchm/golar/database/connection"
+	_ "modernc.org/sqlite"
 )
 
 type Driver struct{}

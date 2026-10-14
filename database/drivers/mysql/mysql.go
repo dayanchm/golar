@@ -2,10 +2,11 @@ package mysql
 
 import (
 	"database/sql"
-	"github.com/dayanchm/golar/database/connection"
-	driver "github.com/go-sql-driver/mysql"
 	"net"
 	"strconv"
+
+	"github.com/dayanchm/golar/database/connection"
+	driver "github.com/go-sql-driver/mysql"
 )
 
 type Driver struct{}
