@@ -128,3 +128,35 @@ func TestSQLiteExecution(t *testing.T) {
 		t.Fatal("expected missing connection error")
 	}
 }
+
+func TestNullPredicatesAndOffset(t *testing.T) {
+	cases := map[string]string{
+		"sqlite":   `SELECT * FROM "users" WHERE "deleted_at" IS NULL AND "email" IS NOT NULL AND "age" >= ? LIMIT ? OFFSET ?`,
+		"postgres": `SELECT * FROM "users" WHERE "deleted_at" IS NULL AND "email" IS NOT NULL AND "age" >= $1 LIMIT $2 OFFSET $3`,
+		"mysql":    "SELECT * FROM `users` WHERE `deleted_at` IS NULL AND `email` IS NOT NULL AND `age` >= ? LIMIT ? OFFSET ?",
+	}
+	for dialect, expected := range cases {
+		q := query.New(nil, dialect).Table("users").WhereNull("deleted_at").WhereNotNull("email").Where("age", ">=", 18).Limit(10).Offset(20)
+		sql, args, err := q.ToSQL()
+		if err != nil || sql != expected || !reflect.DeepEqual(args, []any{18, 10, 20}) {
+			t.Fatalf("%s: %q %v %v", dialect, sql, args, err)
+		}
+	}
+	offsetOnly := map[string]string{
+		"sqlite":   `SELECT * FROM "users" LIMIT -1 OFFSET ?`,
+		"postgres": `SELECT * FROM "users" OFFSET $1`,
+		"mysql":    "SELECT * FROM `users` LIMIT 18446744073709551615 OFFSET ?",
+	}
+	for dialect, expected := range offsetOnly {
+		sql, args, err := query.New(nil, dialect).Table("users").Offset(5).Compile()
+		if err != nil || sql != expected || !reflect.DeepEqual(args, []any{5}) {
+			t.Fatalf("%s offset only: %q %v %v", dialect, sql, args, err)
+		}
+	}
+	base := query.New(nil, "sqlite").Table("users")
+	for i, q := range []*query.Builder{base.Offset(-1), base.WhereNull("id; --"), base.WhereNotNull(""), base.Where("id", "IS NULL", 1)} {
+		if sql, args, err := q.Compile(); err == nil || sql != "" || args != nil {
+			t.Fatalf("case %d: %q %v %v", i, sql, args, err)
+		}
+	}
+}
