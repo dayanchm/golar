@@ -93,6 +93,22 @@ func (c *compiler) where(conditions []condition) (string, error) {
 			predicates = append(predicates, column+" "+condition.operator)
 			continue
 		}
+		if condition.operator == "IN" || condition.operator == "NOT IN" {
+			if len(condition.values) == 0 {
+				// Empty lists are invalid SQL; use constant predicates with the same meaning.
+				predicates = append(predicates, map[string]string{"IN": "1 = 0", "NOT IN": "1 = 1"}[condition.operator])
+				continue
+			}
+			placeholders := make([]string, len(condition.values))
+			for i, value := range condition.values {
+				if value == nil {
+					return "", fmt.Errorf("query: %s list must not contain NULL", condition.operator)
+				}
+				placeholders[i] = c.bind(value)
+			}
+			predicates = append(predicates, column+" "+condition.operator+" ("+strings.Join(placeholders, ", ")+")")
+			continue
+		}
 		if !comparison(condition.operator) && condition.operator != "LIKE" && condition.operator != "NOT LIKE" {
 			return "", fmt.Errorf("query: invalid operator %q", condition.operator)
 		}

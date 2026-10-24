@@ -213,3 +213,62 @@ func TestJoinAggregatePaginateExecution(t *testing.T) {
 		t.Fatalf("empty pagination: %+v", p)
 	}
 }
+
+func TestWhereIn(t *testing.T) {
+	for _, dialect := range []string{"sqlite", "postgres", "mysql"} {
+		sql, args, err := query.New(nil, dialect).Table("users").Where("age", ">", 1).WhereIn("id", []any{1, 2, 3}).WhereNotIn("name", []any{"x"}).Compile()
+		expected := dialectSQL(dialect, `SELECT * FROM "users" WHERE "age" > ? AND "id" IN (?, ?, ?) AND "name" NOT IN (?)`)
+		if err != nil || sql != expected || !reflect.DeepEqual(args, []any{1, 1, 2, 3, "x"}) {
+			t.Fatalf("%s: %q %v %v", dialect, sql, args, err)
+		}
+	}
+	sql, args, err := query.New(nil, "sqlite").Table("users").WhereIn("id", nil).WhereNotIn("id", []any{}).Compile()
+	if err != nil || sql != `SELECT * FROM "users" WHERE 1 = 0 AND 1 = 1` || len(args) != 0 {
+		t.Fatalf("empty lists: %q %v %v", sql, args, err)
+	}
+	values := []any{1}
+	q := query.New(nil, "sqlite").Table("users").WhereIn("id", values)
+	values[0] = 2
+	if _, args, _ := q.Compile(); !reflect.DeepEqual(args, []any{1}) {
+		t.Fatalf("WhereIn must copy its list: %v", args)
+	}
+	for i, q := range []*query.Builder{
+		query.New(nil, "sqlite").Table("users").WhereIn("id; --", []any{1}),
+		query.New(nil, "sqlite").Table("users").WhereIn("id", []any{1, nil}),
+	} {
+		if _, _, err := q.Compile(); err == nil {
+			t.Fatalf("case %d: expected error", i)
+		}
+	}
+}
+
+func TestInsertGetIDAndWhereInExecution(t *testing.T) {
+	db, _ := connect(t)
+	ctx := context.Background()
+	var ids []any
+	for _, name := range []string{"Ada", "Bob", "Cem"} {
+		id, err := db.Table("query_users").InsertGetID(ctx, map[string]any{"name": name}, "id")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(ids) > 0 && id <= ids[len(ids)-1].(int64) {
+			t.Fatalf("ids must increase: %v then %d", ids, id)
+		}
+		ids = append(ids, id)
+	}
+	if n, err := db.Table("query_users").WhereIn("id", ids[:2]).Count(ctx); err != nil || n != 2 {
+		t.Fatalf("where in: %d %v", n, err)
+	}
+	if n, err := db.Table("query_users").WhereNotIn("id", ids[:2]).Count(ctx); err != nil || n != 1 {
+		t.Fatalf("where not in: %d %v", n, err)
+	}
+	if n, err := db.Table("query_users").WhereIn("id", nil).Count(ctx); err != nil || n != 0 {
+		t.Fatalf("empty where in: %d %v", n, err)
+	}
+	if _, err := db.Table("query_missing").InsertGetID(ctx, map[string]any{"name": "x"}, "id"); err == nil {
+		t.Fatal("expected driver error")
+	}
+	if _, err := db.Table("query_users").InsertGetID(ctx, map[string]any{}, "id"); err == nil {
+		t.Fatal("expected validation error")
+	}
+}

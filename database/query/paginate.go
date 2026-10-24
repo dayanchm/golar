@@ -14,6 +14,17 @@ type Pagination struct {
 	LastPage      int // at least 1, even when Total is zero
 }
 
+// NewPagination computes the last page for total rows split into perPage-sized pages.
+func NewPagination(page, perPage int, total int64) Pagination {
+	lastPage := 1
+	if perPage > 0 {
+		if pages := (total + int64(perPage) - 1) / int64(perPage); pages > 1 {
+			lastPage = int(min(pages, math.MaxInt))
+		}
+	}
+	return Pagination{Page: page, PerPage: perPage, Total: total, LastPage: lastPage}
+}
+
 // HasMorePages reports whether a page follows this one.
 func (p Pagination) HasMorePages() bool { return p.Page < p.LastPage }
 
@@ -48,13 +59,9 @@ func (b *Builder) Paginate(ctx context.Context, page, perPage int) (*sql.Rows, P
 	if err != nil {
 		return nil, Pagination{}, err
 	}
-	lastPage := 1
-	if pages := (total + int64(perPage) - 1) / int64(perPage); pages > 1 {
-		lastPage = int(min(pages, math.MaxInt))
-	}
 	rows, err := paged.QueryContext(ctx)
 	if err != nil {
 		return nil, Pagination{}, err
 	}
-	return rows, Pagination{Page: page, PerPage: perPage, Total: total, LastPage: lastPage}, nil
+	return rows, NewPagination(page, perPage, total), nil
 }

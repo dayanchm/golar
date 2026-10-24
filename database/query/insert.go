@@ -24,6 +24,54 @@ func (b *Builder) InsertContext(ctx context.Context, values map[string]any) (sql
 	return b.exec(ctx, "insert", statement, args)
 }
 
+// InsertGetID inserts one row and returns the generated integer key in column.
+// PostgreSQL uses RETURNING; SQLite and MySQL use LastInsertId.
+func (b *Builder) InsertGetID(ctx context.Context, values map[string]any, column string) (int64, error) {
+	statement, args, err := b.CompileInsert(values)
+	if err != nil {
+		return 0, err
+	}
+	c, _ := newCompiler(b.dialect) // CompileInsert validated the dialect
+	returning, err := c.identifier(column, false)
+	if err != nil {
+		return 0, err
+	}
+	if b.dialect != "postgres" {
+		result, err := b.exec(ctx, "insert", statement, args)
+		if err != nil {
+			return 0, err
+		}
+		id, err := result.LastInsertId()
+		if err != nil {
+			return 0, fmt.Errorf("query: insert: %w", err)
+		}
+		return id, nil
+	}
+	if b.runner == nil {
+		return 0, fmt.Errorf("query: connection is required")
+	}
+	rows, err := b.runner.QueryContext(ctx, statement+" RETURNING "+returning, args...)
+	if err != nil {
+		return 0, fmt.Errorf("query: insert: %w", err)
+	}
+	defer rows.Close()
+	var id int64
+	if !rows.Next() {
+		err = rows.Err()
+		if err == nil {
+			err = sql.ErrNoRows
+		}
+		return 0, fmt.Errorf("query: insert: %w", err)
+	}
+	if err := rows.Scan(&id); err != nil {
+		return 0, fmt.Errorf("query: insert: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return 0, fmt.Errorf("query: insert: %w", err)
+	}
+	return id, nil
+}
+
 // CompileInsert returns INSERT SQL and bindings in column order without executing.
 // A nil value inserts NULL. Select, Where, OrderBy, Limit and Offset are rejected.
 func (b *Builder) CompileInsert(values map[string]any) (string, []any, error) {
