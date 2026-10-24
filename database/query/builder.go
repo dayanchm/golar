@@ -1,4 +1,5 @@
-// Package query builds parameterized SELECT and INSERT queries for SQLite, PostgreSQL and MySQL.
+// Package query builds parameterized SELECT, INSERT, UPDATE and DELETE queries
+// for SQLite, PostgreSQL and MySQL.
 package query
 
 import (
@@ -21,6 +22,7 @@ type condition struct {
 	null             bool // operator is IS NULL or IS NOT NULL and binds nothing
 }
 type ordering struct{ column, direction string }
+type join struct{ kind, table, first, operator, second string }
 
 // Builder is immutable: chaining returns a copy and never changes the receiver.
 // Bound values and the connection remain caller-owned; do not mutate them concurrently.
@@ -31,7 +33,9 @@ type Builder struct {
 	columns        []string
 	conditions     []condition
 	orders         []ordering
+	joins          []join
 	limit, offset  *int
+	allRows        bool
 	err            error
 }
 
@@ -43,6 +47,7 @@ func (b *Builder) clone() *Builder {
 	c.columns = slices.Clone(b.columns)
 	c.conditions = slices.Clone(b.conditions)
 	c.orders = slices.Clone(b.orders)
+	c.joins = slices.Clone(b.joins)
 	return &c
 }
 func (b *Builder) Table(name string) *Builder { c := b.clone(); c.table = name; return c }
