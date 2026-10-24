@@ -298,4 +298,21 @@ sorted, bound columns. `Update` and `Delete` require a `Where` clause (or an exp
 `AllRows()`). Joins, `Count`/`Sum`/`Avg`/`Min`/`Max` and `Paginate(ctx, page, perPage)`
 are also available. Transaction
 handles support the same `Table` API. See the [query builder guide](docs/database/query-builder.md)
-for supported operators, identifier rules and resource handling. ORM support remains planned.
+for supported operators, identifier rules and resource handling.
+
+### ORM (v0.4.0 development)
+
+```go
+type User struct {
+    orm.Model
+    Name  string
+    Posts []Post `orm:"hasMany"`
+}
+
+err := orm.Create(ctx, db, &user)
+users, err := orm.Query[User](db).Where("active", "=", true).With("Posts").Get(ctx)
+```
+
+Models are plain structs. CRUD, `hasOne`/`hasMany`/`belongsTo`/`belongsToMany`
+relationships, N+1-free eager loading and soft deletes are covered in the
+[ORM guide](docs/database/orm.md).
