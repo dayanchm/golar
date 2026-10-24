@@ -1,4 +1,4 @@
-// Package query builds parameterized SELECT queries for SQLite, PostgreSQL and MySQL.
+// Package query builds parameterized SELECT and INSERT queries for SQLite, PostgreSQL and MySQL.
 package query
 
 import (
@@ -12,11 +12,13 @@ import (
 // Querier is implemented by database/sql connections and transactions.
 type Querier interface {
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
 }
 
 type condition struct {
 	column, operator string
 	value            any
+	null             bool // operator is IS NULL or IS NOT NULL and binds nothing
 }
 type ordering struct{ column, direction string }
 
@@ -29,7 +31,7 @@ type Builder struct {
 	columns        []string
 	conditions     []condition
 	orders         []ordering
-	limit          *int
+	limit, offset  *int
 	err            error
 }
 
@@ -55,12 +57,27 @@ func (b *Builder) Select(columns ...string) *Builder {
 	return c
 }
 
-// Where appends an AND predicate. NULL comparisons require a future explicit NULL API.
+// Where appends an AND predicate. Use WhereNull or WhereNotNull for NULL checks.
 func (b *Builder) Where(column, operator string, value any) *Builder {
 	c := b.clone()
-	c.conditions = append(c.conditions, condition{column, strings.ToUpper(strings.TrimSpace(operator)), value})
+	c.conditions = append(c.conditions, condition{column: column, operator: strings.ToUpper(strings.TrimSpace(operator)), value: value})
 	return c
 }
+
+// WhereNull appends an AND "column IS NULL" predicate.
+func (b *Builder) WhereNull(column string) *Builder {
+	c := b.clone()
+	c.conditions = append(c.conditions, condition{column: column, operator: "IS NULL", null: true})
+	return c
+}
+
+// WhereNotNull appends an AND "column IS NOT NULL" predicate.
+func (b *Builder) WhereNotNull(column string) *Builder {
+	c := b.clone()
+	c.conditions = append(c.conditions, condition{column: column, operator: "IS NOT NULL", null: true})
+	return c
+}
+
 func (b *Builder) OrderBy(column, direction string) *Builder {
 	c := b.clone()
 	c.orders = append(c.orders, ordering{column, strings.ToUpper(strings.TrimSpace(direction))})
@@ -69,6 +86,9 @@ func (b *Builder) OrderBy(column, direction string) *Builder {
 
 // Limit binds a non-negative row limit; zero returns no rows.
 func (b *Builder) Limit(n int) *Builder { c := b.clone(); c.limit = &n; return c }
+
+// Offset binds a non-negative number of rows to skip.
+func (b *Builder) Offset(n int) *Builder { c := b.clone(); c.offset = &n; return c }
 
 // QueryContext executes the compiled query. The caller must close and scan rows,
 // and check rows.Err(). Driver and cancellation errors are preserved.
