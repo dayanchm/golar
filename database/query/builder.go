@@ -83,6 +83,28 @@ func (b *Builder) WhereNotNull(column string) *Builder {
 	return c
 }
 
+// Join appends an INNER JOIN comparing two columns, for example
+// Join("posts", "posts.user_id", "=", "users.id"). Columns are never bound values.
+func (b *Builder) Join(table, first, operator, second string) *Builder {
+	return b.addJoin("INNER", table, first, operator, second)
+}
+
+// LeftJoin appends a LEFT JOIN. See Join.
+func (b *Builder) LeftJoin(table, first, operator, second string) *Builder {
+	return b.addJoin("LEFT", table, first, operator, second)
+}
+
+// RightJoin appends a RIGHT JOIN. See Join. SQLite supports it from version 3.39.
+func (b *Builder) RightJoin(table, first, operator, second string) *Builder {
+	return b.addJoin("RIGHT", table, first, operator, second)
+}
+
+func (b *Builder) addJoin(kind, table, first, operator, second string) *Builder {
+	c := b.clone()
+	c.joins = append(c.joins, join{kind, table, first, strings.TrimSpace(operator), second})
+	return c
+}
+
 func (b *Builder) OrderBy(column, direction string) *Builder {
 	c := b.clone()
 	c.orders = append(c.orders, ordering{column, strings.ToUpper(strings.TrimSpace(direction))})
