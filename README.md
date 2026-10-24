@@ -316,3 +316,19 @@ users, err := orm.Query[User](db).Where("active", "=", true).With("Posts").Get(c
 Models are plain structs. CRUD, `hasOne`/`hasMany`/`belongsTo`/`belongsToMany`
 relationships, N+1-free eager loading and soft deletes are covered in the
 [ORM guide](docs/database/orm.md).
+
+### Authentication (v0.4.0 development)
+
+```go
+sessions := session.NewManager()
+guard := &auth.SessionGuard{Provider: &auth.ORMProvider[User]{DB: db}}
+app.Use(sessions.Middleware, auth.CSRF)
+
+user, err := (&auth.Authenticator{Provider: provider}).Attempt(ctx, email, password)
+err = guard.Login(r, user)
+```
+
+Argon2id password hashing, session and bearer-token guards, route middleware,
+gates, policies, roles and permissions, password resets, email verification,
+rate limiting and CSRF protection are described in the
+[authentication guide](docs/auth/README.md).

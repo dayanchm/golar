@@ -49,6 +49,7 @@ type SoftDeletes struct {
 // Info describes a model's mapping.
 type Info struct {
 	Table, PrimaryKey string
+	KeyType           reflect.Type // Go type of the primary key field
 	Columns           []string
 	Relations         []string
 	SoftDeletes       bool
@@ -78,7 +79,7 @@ func Describe(model any) (Info, error) {
 	if err != nil {
 		return Info{}, err
 	}
-	info := Info{Table: m.table, PrimaryKey: m.pk.column, SoftDeletes: m.deletedAt != nil}
+	info := Info{Table: m.table, PrimaryKey: m.pk.column, KeyType: m.pk.typ, SoftDeletes: m.deletedAt != nil}
 	for _, f := range m.fields {
 		info.Columns = append(info.Columns, f.column)
 	}
