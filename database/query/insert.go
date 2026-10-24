@@ -21,14 +21,7 @@ func (b *Builder) InsertContext(ctx context.Context, values map[string]any) (sql
 	if err != nil {
 		return nil, err
 	}
-	if b.runner == nil {
-		return nil, fmt.Errorf("query: connection is required")
-	}
-	result, err := b.runner.ExecContext(ctx, statement, args...)
-	if err != nil {
-		return nil, fmt.Errorf("query: insert: %w", err)
-	}
-	return result, nil
+	return b.exec(ctx, "insert", statement, args)
 }
 
 // CompileInsert returns INSERT SQL and bindings in column order without executing.
@@ -37,8 +30,8 @@ func (b *Builder) CompileInsert(values map[string]any) (string, []any, error) {
 	if b.err != nil {
 		return "", nil, b.err
 	}
-	if len(b.columns) > 0 || len(b.conditions) > 0 || len(b.orders) > 0 || b.limit != nil || b.offset != nil {
-		return "", nil, fmt.Errorf("query: insert does not accept select, where, order, limit or offset clauses")
+	if len(b.columns) > 0 || len(b.conditions) > 0 || len(b.orders) > 0 || len(b.joins) > 0 || b.limit != nil || b.offset != nil {
+		return "", nil, fmt.Errorf("query: insert does not accept select, where, join, order, limit or offset clauses")
 	}
 	if len(values) == 0 {
 		return "", nil, fmt.Errorf("query: insert requires values")

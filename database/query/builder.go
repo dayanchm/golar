@@ -1,4 +1,5 @@
-// Package query builds parameterized SELECT and INSERT queries for SQLite, PostgreSQL and MySQL.
+// Package query builds parameterized SELECT, INSERT, UPDATE and DELETE queries
+// for SQLite, PostgreSQL and MySQL.
 package query
 
 import (
@@ -21,6 +22,7 @@ type condition struct {
 	null             bool // operator is IS NULL or IS NOT NULL and binds nothing
 }
 type ordering struct{ column, direction string }
+type join struct{ kind, table, first, operator, second string }
 
 // Builder is immutable: chaining returns a copy and never changes the receiver.
 // Bound values and the connection remain caller-owned; do not mutate them concurrently.
@@ -31,7 +33,9 @@ type Builder struct {
 	columns        []string
 	conditions     []condition
 	orders         []ordering
+	joins          []join
 	limit, offset  *int
+	allRows        bool
 	err            error
 }
 
@@ -43,6 +47,7 @@ func (b *Builder) clone() *Builder {
 	c.columns = slices.Clone(b.columns)
 	c.conditions = slices.Clone(b.conditions)
 	c.orders = slices.Clone(b.orders)
+	c.joins = slices.Clone(b.joins)
 	return &c
 }
 func (b *Builder) Table(name string) *Builder { c := b.clone(); c.table = name; return c }
@@ -75,6 +80,28 @@ func (b *Builder) WhereNull(column string) *Builder {
 func (b *Builder) WhereNotNull(column string) *Builder {
 	c := b.clone()
 	c.conditions = append(c.conditions, condition{column: column, operator: "IS NOT NULL", null: true})
+	return c
+}
+
+// Join appends an INNER JOIN comparing two columns, for example
+// Join("posts", "posts.user_id", "=", "users.id"). Columns are never bound values.
+func (b *Builder) Join(table, first, operator, second string) *Builder {
+	return b.addJoin("INNER", table, first, operator, second)
+}
+
+// LeftJoin appends a LEFT JOIN. See Join.
+func (b *Builder) LeftJoin(table, first, operator, second string) *Builder {
+	return b.addJoin("LEFT", table, first, operator, second)
+}
+
+// RightJoin appends a RIGHT JOIN. See Join. SQLite supports it from version 3.39.
+func (b *Builder) RightJoin(table, first, operator, second string) *Builder {
+	return b.addJoin("RIGHT", table, first, operator, second)
+}
+
+func (b *Builder) addJoin(kind, table, first, operator, second string) *Builder {
+	c := b.clone()
+	c.joins = append(c.joins, join{kind, table, first, strings.TrimSpace(operator), second})
 	return c
 }
 
