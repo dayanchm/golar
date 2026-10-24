@@ -73,7 +73,9 @@ func (b *PasswordBroker) SendResetLink(ctx context.Context, identifier string) e
 	if err != nil {
 		return err
 	}
-	if err := b.Store.Put(ctx, user.AuthID(), tokenID(token), time.Now().UTC()); err != nil {
+	// Whole seconds: MySQL TIMESTAMP rounds fractions, which could move the
+	// creation time into the future and stretch the TTL and throttle.
+	if err := b.Store.Put(ctx, user.AuthID(), tokenID(token), time.Now().UTC().Truncate(time.Second)); err != nil {
 		return err
 	}
 	return b.Send(ctx, user, token)
