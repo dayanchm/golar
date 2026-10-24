@@ -40,7 +40,7 @@ func TestApplicationRoutes(t *testing.T) {
 		if rec.Code != tt.code || rec.Header().Get("X-App") != "Golar" {
 			t.Fatalf("response = %d %v", rec.Code, rec.Header())
 		}
-		if tt.code == 405 && rec.Header().Get("Allow") != "DELETE, GET, PATCH, POST, PUT" {
+		if tt.code == 405 && rec.Header().Get("Allow") != "DELETE, GET, HEAD, PATCH, POST, PUT" {
 			t.Fatal(rec.Header())
 		}
 	}

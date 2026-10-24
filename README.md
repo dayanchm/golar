@@ -188,7 +188,10 @@ Register routes before serving requests.
 
 Unknown paths return 404. Matching paths without a registered request method
 return 405 with a sorted, deduplicated `Allow` header containing the registered
-methods of all matching routes. HEAD and OPTIONS are not registered implicitly.
+methods of all matching routes. `HEAD` requests are served by the path's GET
+route (without a body) unless a HEAD route is registered, and `Allow` lists
+`HEAD` wherever GET is available. OPTIONS is not registered implicitly; handle
+CORS preflight in middleware.
 
 ## Middleware
 

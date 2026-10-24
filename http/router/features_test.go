@@ -78,7 +78,7 @@ func TestMethodHelpersAndGroups(t *testing.T) {
 			rec := httptest.NewRecorder()
 			app.ServeHTTP(rec, httptest.NewRequest(method, path, nil))
 			if method == "OPTIONS" {
-				if rec.Code != 405 || rec.Header().Get("Allow") != "DELETE, GET, PATCH, POST, PUT" {
+				if rec.Code != 405 || rec.Header().Get("Allow") != "DELETE, GET, HEAD, PATCH, POST, PUT" {
 					t.Fatalf("grouped=%v: unexpected method rejection: %d %v", grouped, rec.Code, rec.Header())
 				}
 			} else if rec.Code != 200 || rec.Header().Get("X-Method") != method || rec.Header().Get("X-ID") != "42" {
