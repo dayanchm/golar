@@ -111,6 +111,10 @@ func (r *Router) Use(middlewares ...middleware.Middleware) {
 
 func (r *Router) serveHTTP(w http.ResponseWriter, req *http.Request) {
 	var allowedMethods []string
+	// HEAD falls back to the GET route for the path (RFC 9110 §9.3.2) unless a
+	// HEAD route is registered; net/http discards the body for HEAD requests.
+	var fallback http.HandlerFunc
+	var fallbackParams map[string]string
 	for _, route := range r.routes {
 		params, ok := match(route.Path, req.URL.Path)
 		if !ok {
@@ -118,12 +122,19 @@ func (r *Router) serveHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 		if route.Method != req.Method {
 			allowedMethods = append(allowedMethods, route.Method)
+			if route.Method == http.MethodGet {
+				allowedMethods = append(allowedMethods, http.MethodHead)
+				if req.Method == http.MethodHead && fallback == nil {
+					fallback, fallbackParams = route.Handler, params
+				}
+			}
 			continue
 		}
-		for key, value := range params {
-			req.SetPathValue(key, value)
-		}
-		route.Handler(w, req)
+		serve(w, req, route.Handler, params)
+		return
+	}
+	if fallback != nil {
+		serve(w, req, fallback, fallbackParams)
 		return
 	}
 
@@ -141,4 +152,11 @@ func (r *Router) serveHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	http.NotFound(w, req)
+}
+
+func serve(w http.ResponseWriter, req *http.Request, handler http.HandlerFunc, params map[string]string) {
+	for key, value := range params {
+		req.SetPathValue(key, value)
+	}
+	handler(w, req)
 }
