@@ -43,6 +43,10 @@ operators, directions, empty explicit projections, nil comparisons and negative
 limits return errors during compilation. Values are always bound, never SQL text.
 Use `WhereNull(column)` and `WhereNotNull(column)` for NULL checks; they bind nothing.
 
+`WhereIn(column, values)` and `WhereNotIn(column, values)` bind each value
+(`"id" IN (?, ?, ?)`). An empty `WhereIn` list matches no rows and an empty
+`WhereNotIn` list matches every row; NULL list entries are rejected.
+
 `Offset` binds a non-negative row count. Without `Limit`, SQLite compiles
 `LIMIT -1 OFFSET ?` and MySQL `LIMIT 18446744073709551615 OFFSET ?`, since both
 require a limit before an offset; PostgreSQL compiles `OFFSET $n` alone.
@@ -66,6 +70,9 @@ builders carrying `Select`, `Where`, `OrderBy`, `Limit` or `Offset` return error
 before any database call. `InsertContext(ctx, values)` honours cancellation, and
 `CompileInsert(values)` returns SQL and bindings without executing. Driver errors
 are wrapped with `%w`.
+
+`InsertGetID(ctx, values, "id")` returns the generated integer key on every
+dialect: PostgreSQL appends `RETURNING "id"`, SQLite and MySQL use `LastInsertId`.
 
 `result.RowsAffected()` works on all drivers. `result.LastInsertId()` works on
 SQLite and MySQL; the PostgreSQL driver does not support it (use `RETURNING`

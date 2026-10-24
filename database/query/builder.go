@@ -19,7 +19,8 @@ type Querier interface {
 type condition struct {
 	column, operator string
 	value            any
-	null             bool // operator is IS NULL or IS NOT NULL and binds nothing
+	values           []any // bound list for IN and NOT IN
+	null             bool  // operator is IS NULL or IS NOT NULL and binds nothing
 }
 type ordering struct{ column, direction string }
 type join struct{ kind, table, first, operator, second string }
@@ -73,6 +74,20 @@ func (b *Builder) Where(column, operator string, value any) *Builder {
 func (b *Builder) WhereNull(column string) *Builder {
 	c := b.clone()
 	c.conditions = append(c.conditions, condition{column: column, operator: "IS NULL", null: true})
+	return c
+}
+
+// WhereIn appends an AND "column IN (...)" predicate. An empty list matches no rows.
+func (b *Builder) WhereIn(column string, values []any) *Builder {
+	c := b.clone()
+	c.conditions = append(c.conditions, condition{column: column, operator: "IN", values: slices.Clone(values)})
+	return c
+}
+
+// WhereNotIn appends an AND "column NOT IN (...)" predicate. An empty list matches every row.
+func (b *Builder) WhereNotIn(column string, values []any) *Builder {
+	c := b.clone()
+	c.conditions = append(c.conditions, condition{column: column, operator: "NOT IN", values: slices.Clone(values)})
 	return c
 }
 
