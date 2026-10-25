@@ -1,6 +1,11 @@
-# Golar — AI-native full-stack framework for Go
+# Golar — full-stack framework for Go
 
-> A modern, modular, AI-native full-stack framework for Go, inspired by Laravel's developer experience.
+> A modern, modular full-stack framework for Go, inspired by Laravel's developer experience.
+
+Golar ships a project generator and CLI, a router with middleware, a graceful HTTP
+server, migrations and a schema builder, a query builder, an ORM, sessions and
+authentication for SQLite, PostgreSQL and MySQL. See the [roadmap](#roadmap) for
+planned features, including AI-native tooling.
 
 ## CLI and project scaffolding (v0.2.0)
 
@@ -335,3 +340,11 @@ Argon2id password hashing, session and bearer-token guards, route middleware,
 gates, policies, roles and permissions, password resets, email verification,
 rate limiting and CSRF protection are described in the
 [authentication guide](docs/auth/README.md).
+
+## Roadmap
+
+Planned work is tracked in [GitHub milestones](https://github.com/dayanchm/golar/milestones):
+validation, a richer request context, more middleware, a SQL session store and
+mail delivery are next. AI-native tooling, such as a `golar mcp` command that
+exposes routes, schema and models to coding agents, is planned but not yet
+available.
