@@ -1,0 +1,18 @@
+package models
+
+import (
+ "strconv"
+
+ "github.com/dayanchm/golar/database/orm"
+)
+
+// User is an account that can log in. Password holds an Argon2id hash.
+type User struct {
+ orm.Model
+ Name string `json:"name"`
+ Email string `json:"email"`
+ Password string `json:"-"`
+}
+
+func (u *User) AuthID() string {return strconv.FormatInt(u.ID,10)}
+func (u *User) AuthPassword() string {return u.Password}

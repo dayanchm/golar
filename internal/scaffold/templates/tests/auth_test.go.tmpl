@@ -1,0 +1,119 @@
+package tests
+
+import (
+ "bytes"
+ "context"
+ "encoding/json"
+ "fmt"
+ "net/http"
+{{if eq .Auth "session"}} "net/http/cookiejar"
+{{end}} "net/http/httptest"
+ "os"
+{{if eq .Database "sqlite"}} "path/filepath"
+{{end}} "testing"
+ "time"
+
+ "github.com/dayanchm/golar/database/migrations"
+ _ "{{.Module}}/database/migrations"
+ "{{.Module}}/internal/bootstrap"
+ "{{.Module}}/internal/config"
+ "{{.Module}}/internal/database"
+)
+
+// newServer migrates a test database and serves the application over HTTP.
+func newServer(t *testing.T) *httptest.Server {
+ t.Helper()
+ if err:=config.LoadEnv("../.env");err!=nil{t.Fatal(err)}
+{{if eq .Database "sqlite"}} t.Setenv("DATABASE_DSN",filepath.Join(t.TempDir(),"app.db"))
+{{end}}{{if eq .Auth "session"}} t.Setenv("SESSION_SECURE_COOKIE","false")
+{{end}} ctx:=context.Background()
+ db,err:=database.Open(ctx)
+ if err!=nil{
+  if os.Getenv("CI")!=""{t.Fatal(err)}
+  t.Skipf("database unavailable (set DATABASE_DSN): %v",err)
+ }
+ t.Cleanup(func(){_=db.Close()})
+ if err=migrations.New(db).Migrate(ctx);err!=nil{t.Fatal(err)}
+ app,err:=bootstrap.NewWithDB(db);if err!=nil{t.Fatal(err)}
+ server:=httptest.NewServer(app)
+ t.Cleanup(server.Close)
+ return server
+}
+
+type client struct {
+ t *testing.T
+ http *http.Client
+ base string
+ headers map[string]string
+}
+
+func (c *client) do(method,path string,body any) (int,map[string]any) {
+ c.t.Helper()
+ var payload bytes.Buffer
+ if body!=nil{if err:=json.NewEncoder(&payload).Encode(body);err!=nil{c.t.Fatal(err)}}
+ request,err:=http.NewRequest(method,c.base+path,&payload);if err!=nil{c.t.Fatal(err)}
+ request.Header.Set("Content-Type","application/json")
+ for key,value:=range c.headers{request.Header.Set(key,value)}
+ response,err:=c.http.Do(request);if err!=nil{c.t.Fatal(err)}
+ defer response.Body.Close()
+ result:=map[string]any{}
+ _=json.NewDecoder(response.Body).Decode(&result)
+ return response.StatusCode,result
+}
+
+func uniqueEmail() string {return fmt.Sprintf("user%d@example.com",time.Now().UnixNano())}
+{{if eq .Auth "token"}}
+func TestTokenAuthentication(t *testing.T) {
+ server:=newServer(t)
+ c:=&client{t: t,http: server.Client(),base: server.URL,headers: map[string]string{}}
+ email:=uniqueEmail()
+ code,body:=c.do("POST","/api/auth/register",map[string]string{"name":"Ada","email":email,"password":"correct horse"})
+ if code!=http.StatusCreated||body["token"]==""{t.Fatalf("register = %d %v",code,body)}
+ if code,_=c.do("GET","/api/auth/me",nil);code!=http.StatusUnauthorized{t.Fatalf("anonymous me = %d",code)}
+ if code,body=c.do("POST","/api/auth/register",map[string]string{"name":"Ada","email":email,"password":"correct horse"});code!=http.StatusUnprocessableEntity{t.Fatalf("duplicate register = %d %v",code,body)}
+ if code,_=c.do("POST","/api/auth/login",map[string]string{"email":email,"password":"wrong password"});code!=http.StatusUnauthorized{t.Fatalf("wrong password = %d",code)}
+ code,body=c.do("POST","/api/auth/login",map[string]string{"email":email,"password":"correct horse"})
+ token,_:=body["token"].(string)
+ if code!=http.StatusOK||token==""{t.Fatalf("login = %d %v",code,body)}
+ c.headers["Authorization"]="Bearer "+token
+ if code,body=c.do("GET","/api/auth/me",nil);code!=http.StatusOK||body["email"]!=email{t.Fatalf("me = %d %v",code,body)}
+ if code,_=c.do("POST","/api/auth/logout",nil);code!=http.StatusNoContent{t.Fatalf("logout = %d",code)}
+ if code,_=c.do("GET","/api/auth/me",nil);code!=http.StatusUnauthorized{t.Fatalf("revoked token = %d",code)}
+}
+{{else}}
+func TestSessionAuthentication(t *testing.T) {
+ server:=newServer(t)
+ jar,err:=cookiejar.New(nil);if err!=nil{t.Fatal(err)}
+ c:=&client{t: t,http: &http.Client{Jar: jar},base: server.URL,headers: map[string]string{}}
+ csrf:=func(){
+  code,body:=c.do("GET","/api/auth/csrf",nil)
+  token,_:=body["token"].(string)
+  if code!=http.StatusOK||token==""{t.Fatalf("csrf = %d %v",code,body)}
+  c.headers["X-CSRF-Token"]=token
+ }
+ email:=uniqueEmail()
+ credentials:=map[string]string{"name":"Ada","email":email,"password":"correct horse"}
+ if code,_:=c.do("POST","/api/auth/register",credentials);code!=http.StatusForbidden{t.Fatalf("register without CSRF = %d",code)}
+ csrf()
+ if code,body:=c.do("POST","/api/auth/register",credentials);code!=http.StatusCreated{t.Fatalf("register = %d %v",code,body)}
+ if code,body:=c.do("GET","/api/auth/me",nil);code!=http.StatusOK||body["email"]!=email{t.Fatalf("me = %d %v",code,body)}
+ csrf() // logging in rotates the token
+ if code,_:=c.do("POST","/api/auth/logout",nil);code!=http.StatusNoContent{t.Fatalf("logout = %d",code)}
+ if code,_:=c.do("GET","/api/auth/me",nil);code!=http.StatusUnauthorized{t.Fatalf("me after logout = %d",code)}
+ csrf()
+ if code,_:=c.do("POST","/api/auth/login",map[string]string{"email":email,"password":"wrong password"});code!=http.StatusUnauthorized{t.Fatalf("wrong password = %d",code)}
+ if code,body:=c.do("POST","/api/auth/login",map[string]string{"email":email,"password":"correct horse"});code!=http.StatusOK{t.Fatalf("login = %d %v",code,body)}
+ if code,_:=c.do("GET","/api/auth/me",nil);code!=http.StatusOK{t.Fatalf("me after login = %d",code)}
+}
+{{end}}
+func TestRegisterValidation(t *testing.T) {
+ server:=newServer(t)
+ c:=&client{t: t,http: server.Client(),base: server.URL,headers: map[string]string{}}
+{{if eq .Auth "session"}} jar,err:=cookiejar.New(nil);if err!=nil{t.Fatal(err)}
+ c.http=&http.Client{Jar: jar}
+ _,body:=c.do("GET","/api/auth/csrf",nil)
+ c.headers["X-CSRF-Token"],_=body["token"].(string)
+{{end}} code,body:=c.do("POST","/api/auth/register",map[string]string{"name":"","email":"not-an-email","password":"short"})
+ errs,_:=body["errors"].(map[string]any)
+ if code!=http.StatusUnprocessableEntity||len(errs)!=3{t.Fatalf("register = %d %v",code,body)}
+}

@@ -68,7 +68,7 @@ func (c *CLI) Run(ctx context.Context, args []string) error {
 func (c *CLI) help() {
 	fmt.Fprintln(c.Out, `Golar CLI
   golar new <name> [--template api|web|fullstack] [--database none|sqlite|postgres|mysql]
-                   [--frontend none|react|vue|svelte] [--auth none|token] [--docker]
+                   [--frontend none|react|vue|svelte] [--auth none|token|session] [--docker]
                    [--module path] [--interactive | --no-interactive] [--dir parent]
                    [--framework-dir path | --framework-version version]
   golar serve [--dir project] [--addr :8080]
@@ -89,7 +89,7 @@ func (c *CLI) newProject(args []string) error {
 	flags.StringVar(&o.Template, "template", "api", "api, web or fullstack")
 	flags.StringVar(&o.Database, "database", "none", "none, sqlite, postgres or mysql")
 	flags.StringVar(&o.Frontend, "frontend", "", "none, react, vue or svelte")
-	flags.StringVar(&o.Auth, "auth", "none", "none or token")
+	flags.StringVar(&o.Auth, "auth", "none", "none, token or session (token and session need a database)")
 	flags.BoolVar(&o.Docker, "docker", false, "include Docker files")
 	flags.StringVar(&o.FrameworkDir, "framework-dir", "", "local Golar source directory")
 	flags.StringVar(&o.FrameworkVersion, "framework-version", "", "published Golar version")
@@ -178,9 +178,13 @@ func (c *CLI) newProject(args []string) error {
 		} else {
 			o.Frontend = "none"
 		}
-		o.Auth, err = ask("Authentication", o.Auth, "none", "token")
-		if err != nil {
-			return err
+		if o.Database != "none" {
+			o.Auth, err = ask("Authentication", o.Auth, "none", "token", "session")
+			if err != nil {
+				return err
+			}
+		} else {
+			o.Auth = "none"
 		}
 		docker := "no"
 		if o.Docker {

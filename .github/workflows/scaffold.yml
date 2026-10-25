@@ -18,18 +18,23 @@ jobs:
           - template: api
             frontend: none
             database: sqlite
+            auth: token
           - template: web
             frontend: none
             database: postgres
+            auth: session
           - template: fullstack
             frontend: react
             database: none
+            auth: none
           - template: fullstack
             frontend: vue
             database: mysql
+            auth: token
           - template: fullstack
             frontend: svelte
-            database: none
+            database: sqlite
+            auth: session
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -40,16 +45,31 @@ jobs:
         with:
           node-version: '24'
           package-manager-cache: false
+      # Credentials match the DSN defaults in the generated .env.
+      - name: Start PostgreSQL
+        if: matrix.database == 'postgres'
+        run: |
+          docker run -d --name db -p 5432:5432 -e POSTGRES_USER=golar -e POSTGRES_PASSWORD=golar \
+            -e POSTGRES_DB=golar --health-cmd "pg_isready -U golar" --health-interval 2s postgres:17-alpine
+          until [ "$(docker inspect -f '{{.State.Health.Status}}' db)" = healthy ]; do sleep 2; done
+      - name: Start MySQL
+        if: matrix.database == 'mysql'
+        run: |
+          docker run -d --name db -p 3306:3306 -e MYSQL_USER=golar -e MYSQL_PASSWORD=golar \
+            -e MYSQL_DATABASE=golar -e MYSQL_ROOT_PASSWORD=root \
+            --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -proot" --health-interval 2s mysql:8.4
+          until [ "$(docker inspect -f '{{.State.Health.Status}}' db)" = healthy ]; do sleep 2; done
       - name: Build CLI and generate project
         env:
           PROJECT_TEMPLATE: ${{ matrix.template }}
           PROJECT_FRONTEND: ${{ matrix.frontend }}
           PROJECT_DATABASE: ${{ matrix.database }}
+          PROJECT_AUTH: ${{ matrix.auth }}
         run: |
           go build -o "$RUNNER_TEMP/golar" ./cmd/golar
           "$RUNNER_TEMP/golar" new demo --dir "$RUNNER_TEMP" --no-interactive \
             --template "$PROJECT_TEMPLATE" --frontend "$PROJECT_FRONTEND" \
-            --database "$PROJECT_DATABASE" --auth token --docker \
+            --database "$PROJECT_DATABASE" --auth "$PROJECT_AUTH" --docker \
             --framework-dir "$GITHUB_WORKSPACE"
       - name: Test generated Go project
         run: |
@@ -59,6 +79,7 @@ jobs:
           go test -race ./...
           go build ./cmd/server
           "$RUNNER_TEMP/golar" routes
+          if [ -f internal/database/database.go ]; then "$RUNNER_TEMP/golar" migrate && "$RUNNER_TEMP/golar" migrate:status; fi
           go mod vendor
           docker compose config --quiet
       - name: Build generated frontend

@@ -16,9 +16,14 @@ func TestGeneratedProjects(t *testing.T) {
 	}
 	_, file, _, _ := runtime.Caller(0)
 	framework := filepath.Clean(filepath.Join(filepath.Dir(file), "../.."))
-	for _, kind := range []string{"api", "web", "fullstack"} {
-		t.Run(kind, func(t *testing.T) {
-			target, err := Create(t.TempDir(), Options{Name: "demo", Module: "example.com/demo", Template: kind, Auth: "token", FrameworkDir: framework})
+	for _, o := range []Options{
+		{Template: "api", Database: "sqlite", Auth: "token"},
+		{Template: "web", Database: "sqlite", Auth: "session"},
+		{Template: "fullstack"},
+	} {
+		t.Run(o.Template+"/"+o.Database+"/"+o.Auth, func(t *testing.T) {
+			o.Name, o.Module, o.FrameworkDir = "demo", "example.com/demo", framework
+			target, err := Create(t.TempDir(), o)
 			if err != nil {
 				t.Fatal(err)
 			}

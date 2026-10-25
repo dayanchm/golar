@@ -3,10 +3,20 @@ package routes
 import (
  "github.com/dayanchm/golar"
  "{{.Module}}/app/handlers"
-)
+{{if ne .Auth "none"}} "{{.Module}}/internal/auth"
+{{end}})
 
-func Register(app *golar.Application) {
+func Register(app *golar.Application{{if ne .Auth "none"}},a *auth.Auth{{end}}) {
  app.Get("/",handlers.Home)
  app.Get("/health",handlers.Health)
- app.Group("/api").Get("/hello",handlers.Greeting)
-}
+ api:=app.Group("/api")
+ api.Get("/hello",handlers.Greeting)
+{{if ne .Auth "none"}}
+ users:=handlers.Auth{Auth: a}
+ account:=api.Group("/auth")
+{{if eq .Auth "session"}} account.Get("/csrf",users.CSRF)
+{{end}} account.Post("/register",a.Throttled(users.Register))
+ account.Post("/login",a.Throttled(users.Login))
+ account.Post("/logout",a.Required(users.Logout))
+ account.Get("/me",a.Required(users.Me))
+{{end}}}

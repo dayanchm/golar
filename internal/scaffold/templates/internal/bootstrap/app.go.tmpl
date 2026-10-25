@@ -7,7 +7,7 @@ import (
  "github.com/dayanchm/golar/http/middleware"
  "{{.Module}}/internal/config"
  "{{.Module}}/routes"
-{{if eq .Auth "token"}} "{{.Module}}/internal/auth"{{end}}
+{{if ne .Auth "none"}} "{{.Module}}/internal/auth"{{end}}
 {{if ne .Frontend "none"}} "io/fs"
  "net/http"
  "os"
@@ -15,17 +15,35 @@ import (
  "strings"{{end}}
 )
 
-func New() (*golar.Application,error) {
- if err:=config.LoadEnv(".env");err!=nil{return nil,err}
+{{if ne .Database "none"}}// New builds the application; the database opens when it starts.
+func New() (*golar.Application,error) {return build(nil)}
+
+// NewWithDB builds the application on an already open database, for tests.
+// The caller closes db.
+func NewWithDB(db *database.DB) (*golar.Application,error) {return build(db)}
+
+func build(db *database.DB) (*golar.Application,error) {
+{{else}}func New() (*golar.Application,error) {
+{{end}} if err:=config.LoadEnv(".env");err!=nil{return nil,err}
  app:=golar.New()
  app.Use(middleware.Logger(),middleware.Recovery())
-{{if eq .Auth "token"}} app.Use(auth.Middleware()){{end}}
 {{if ne .Frontend "none"}} app.Use(frontend()){{end}}
- routes.Register(app)
-{{if ne .Database "none"}} var db *database.DB
- app.OnStart(func(ctx context.Context) error {var err error;db,err=database.Open(ctx);return err})
- app.OnShutdown(func(context.Context) error {if db!=nil{return db.Close()};return nil}){{end}}
- return app,nil
+{{if ne .Auth "none"}} a:=auth.New()
+{{if eq .Auth "session"}} app.Use(a.Middleware()...)
+{{end}} routes.Register(app,a)
+{{else}} routes.Register(app)
+{{end}}{{if ne .Database "none"}} if db!=nil{
+{{if ne .Auth "none"}}  a.Init(db)
+{{end}}  return app,nil
+ }
+ app.OnStart(func(ctx context.Context) error {
+  var err error
+  db,err=database.Open(ctx)
+{{if ne .Auth "none"}}  if err==nil{a.Init(db)}
+{{end}}  return err
+ })
+ app.OnShutdown(func(context.Context) error {if db!=nil{return db.Close()};return nil})
+{{end}} return app,nil
 }
 {{if ne .Frontend "none"}}
 // Production serves Vite's build; development uses Vite's /api proxy.
