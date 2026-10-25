@@ -1,10 +1,12 @@
 # Query builder
 
 The query API supports `Table`, `Select`, AND-connected `Where`, `WhereNull`,
-`WhereNotNull`, `Join`, `LeftJoin`, `RightJoin`, `OrderBy`, `Limit`, `Offset`,
-`ForPage`, `Paginate`, the aggregates `Count`, `Sum`, `Avg`, `Min` and `Max`,
-single-row `Insert`, `Update` and `Delete`. ORM models and result mapping remain
-planned.
+`WhereNotNull`, `WhereIn`, `WhereNotIn`, `Join`, `LeftJoin`, `RightJoin`,
+`OrderBy`, `Limit`, `Offset`, `ForPage`, `Paginate`, the aggregates `Count`,
+`Sum`, `Avg`, `Min` and `Max`, single-row `Insert` and `InsertGetID`, and
+`Update` and `Delete` guarded by `AllRows()`. The builder returns `*sql.Rows`;
+for struct mapping, relationships and soft deletes use the
+[ORM](orm.md), which is built on this package.
 
 ```go
 q := db.Table("users").
@@ -51,7 +53,8 @@ Use `WhereNull(column)` and `WhereNotNull(column)` for NULL checks; they bind no
 `LIMIT -1 OFFSET ?` and MySQL `LIMIT 18446744073709551615 OFFSET ?`, since both
 require a limit before an offset; PostgreSQL compiles `OFFSET $n` alone.
 
-A trusted raw SQL escape hatch remains future work.
+The builder has no raw SQL fragments. Run hand-written statements with the
+connection's `ExecContext` and `QueryContext` (see [transactions and raw SQL](transactions.md)).
 
 ## Insert
 
@@ -75,8 +78,8 @@ are wrapped with `%w`.
 dialect: PostgreSQL appends `RETURNING "id"`, SQLite and MySQL use `LastInsertId`.
 
 `result.RowsAffected()` works on all drivers. `result.LastInsertId()` works on
-SQLite and MySQL; the PostgreSQL driver does not support it (use `RETURNING`
-with raw SQL until the builder supports it). Custom runners passed to `query.New`
+SQLite and MySQL; the PostgreSQL driver does not support it, so use
+`InsertGetID` for portable code. Custom runners passed to `query.New`
 must implement both `QueryContext` and `ExecContext`.
 
 ## Update and delete
