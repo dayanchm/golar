@@ -68,7 +68,8 @@ The manifest supports flat scalars and JSON, not nested YAML or anchors.
 
 Database starters use `database/sql`, ping on startup and close on shutdown.
 SQLite creates its database file; PostgreSQL and MySQL require running services.
-Set `DATABASE_DSN` in `.env`. No ORM or automatic migration runner is included.
+Set `DATABASE_DSN` in `.env`. Run `golar migrate` to apply generated migrations;
+the query builder and ORM are described below.
 Token auth protects `/api` using a random shared bearer token stored only in
 `.env`; it does not provide user accounts, password login or JWT.
 
