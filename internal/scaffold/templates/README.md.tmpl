@@ -14,10 +14,11 @@ and files. `golar serve --addr :9000` overrides the address. Stop with Ctrl+C.
 
 Folders: app/handlers, app/models, routes, internal/bootstrap, internal/config,
 database/migrations, storage and tests. Add handlers in app/handlers and register
-them in routes/routes.go. This starter has /, /health and /api/hello.
+them in routes/routes.go. This starter has /, /health and /api/hello{{if ne .Auth "none"}}, plus the
+account routes under /api/auth{{end}}.
 
 Configuration uses .env, with existing process variables taking precedence.
-Do not commit .env. .env.example has no authentication secret.
+Do not commit .env.
 golar.yaml is a flat key: value manifest; strings may be quoted. Nested YAML,
 anchors and multiline values are not supported. It stores scaffolding choices,
 not secrets. JSON manifests are also accepted.
@@ -29,17 +30,37 @@ remove the replace directive and require a published Golar version.
 ## Database
 
 {{.Database}} uses database/sql with the {{.Driver}} driver. DATABASE_DSN configures
-the connection. Startup pings the database; shutdown closes it. The starter does
-not add an ORM or run migrations automatically. Put migrations in database/migrations.
+the connection. Startup pings the database; shutdown closes it. Migrations live in
+database/migrations; create one with `golar make:migration create_posts_table` and
+apply them with `golar migrate`. Models in app/models use the Golar ORM.
 {{if ne .Database "sqlite"}}Start the database and set DATABASE_DSN before serving.{{end}}
 {{end}}
-{{if eq .Auth "token"}}
+{{if ne .Auth "none"}}
 ## Authentication
 
-/api routes require `Authorization: Bearer <AUTH_TOKEN>`. A random token was
-written to .env. This is shared-token authentication, not user registration,
-password login or JWT. Set a fresh token when deploying; an empty token rejects
-API requests with 503. /health and the homepage remain public.
+Run `golar migrate` first: it creates the users table plus the API token and
+password reset tables. Passwords are hashed with Argon2id.
+
+| Route | Description |
+| --- | --- |
+{{if eq .Auth "session"}}| `GET /api/auth/csrf` | CSRF token for the current session |
+{{end}}| `POST /api/auth/register` | Create an account (`name`, `email`, `password`) |
+| `POST /api/auth/login` | Log in with `email` and `password` |
+| `POST /api/auth/logout` | Log out (requires authentication) |
+| `GET /api/auth/me` | The current user (requires authentication) |
+
+{{if eq .Auth "token"}}Register and login return a personal access token. Send it as
+`Authorization: Bearer <token>`; tokens expire after 30 days and only their SHA-256
+hash is stored. Logout revokes the token that made the request.
+{{else}}Login stores the user in a server-side session cookie. Every POST, PUT,
+PATCH and DELETE request must send the token from `/api/auth/csrf` in the
+`X-CSRF-Token` header; logging in rotates it. Sessions are kept in memory, so
+they end when the server restarts. `.env` sets `SESSION_SECURE_COOKIE=false` for
+local HTTP; remove it in production so the cookie requires HTTPS.
+{{end}}
+Register and login are rate limited per client IP, and failed logins per email.
+Protect your own routes with `a.Required(handler)` in routes/routes.go. See the
+Golar authentication guide for gates, roles, password resets and email verification.
 {{end}}
 {{if ne .Frontend "none"}}
 ## Frontend
@@ -53,8 +74,7 @@ npm run dev
 ```
 
 Vite proxies /api and /health to http://localhost:8080. Set GOLAR_BACKEND_URL in
-the frontend process to change the proxy target. For token authentication, the
-frontend page asks for the token; it stays in component memory, not localStorage.
+the frontend process to change the proxy target.
 `npm run build` creates frontend/dist; the Go backend serves it in production.
 Frontend HTML and assets are served by middleware and do not appear in the route list.
 {{end}}

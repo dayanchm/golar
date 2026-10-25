@@ -1,0 +1,104 @@
+package handlers
+
+import (
+ "errors"
+ "net/http"
+ "net/mail"
+ "strconv"
+ "strings"
+{{if eq .Auth "token"}} "time"
+{{end}}
+ "github.com/dayanchm/golar"
+ "github.com/dayanchm/golar/auth"
+ "github.com/dayanchm/golar/database/orm"
+ "{{.Module}}/app/models"
+ appauth "{{.Module}}/internal/auth"
+)
+
+// Auth serves registration, login, logout and the current user.
+type Auth struct{ Auth *appauth.Auth }
+
+type credentials struct {
+ Name string `json:"name"`
+ Email string `json:"email"`
+ Password string `json:"password"`
+}
+
+func (in *credentials) normalize() {
+ in.Name=strings.TrimSpace(in.Name)
+ in.Email=strings.ToLower(strings.TrimSpace(in.Email))
+}
+
+func (in credentials) validate() map[string]string {
+ errs:=map[string]string{}
+ if in.Name==""||len(in.Name)>255{errs["name"]="The name is required and may not exceed 255 characters."}
+ if address,err:=mail.ParseAddress(in.Email);err!=nil||address.Address!=in.Email||len(in.Email)>191{errs["email"]="The email must be a valid email address."}
+ if len(in.Password)<8||len(in.Password)>1024{errs["password"]="The password must be between 8 and 1024 characters."}
+ return errs
+}
+
+func userJSON(u *models.User) map[string]any {
+ return map[string]any{"id":u.ID,"name":u.Name,"email":u.Email}
+}
+
+func (h Auth) Register(c *golar.Context) error {
+ var in credentials
+ if err:=c.BindJSON(&in);err!=nil{return &golar.HTTPError{Code: http.StatusBadRequest,Message: "Invalid JSON body"}}
+ in.normalize()
+ if errs:=in.validate();len(errs)>0{return c.JSON(http.StatusUnprocessableEntity,map[string]any{"errors":errs})}
+ ctx:=c.Request.Context()
+ if _,err:=h.Auth.Users.RetrieveByIdentifier(ctx,in.Email);err==nil{
+  return c.JSON(http.StatusUnprocessableEntity,map[string]any{"errors":map[string]string{"email":"The email has already been taken."}})
+ } else if !errors.Is(err,auth.ErrUserNotFound){return err}
+ hash,err:=auth.HashPassword(in.Password);if err!=nil{return err}
+ user:=&models.User{Name: in.Name,Email: in.Email,Password: hash}
+ if err=orm.Create(ctx,h.Auth.Users.DB,user);err!=nil{return err}
+{{if eq .Auth "token"}} token,_,err:=h.Auth.Tokens.Issue(ctx,user,"api",[]string{"*"},30*24*time.Hour);if err!=nil{return err}
+ return c.JSON(http.StatusCreated,map[string]any{"user":userJSON(user),"token":token})
+{{else}} if err=h.Auth.Guard.Login(c.Request,user);err!=nil{return err}
+ return c.JSON(http.StatusCreated,map[string]any{"user":userJSON(user)})
+{{end}}}
+
+func (h Auth) Login(c *golar.Context) error {
+ var in credentials
+ if err:=c.BindJSON(&in);err!=nil{return &golar.HTTPError{Code: http.StatusBadRequest,Message: "Invalid JSON body"}}
+ in.normalize()
+ ctx:=c.Request.Context()
+ found,err:=h.Auth.Login.Attempt(ctx,in.Email,in.Password)
+ var limited *auth.RateLimitError
+ switch {
+ case errors.As(err,&limited):
+  c.Header("Retry-After",strconv.Itoa(int(limited.RetryAfter.Seconds())+1))
+  return c.JSON(http.StatusTooManyRequests,map[string]string{"message":"Too many login attempts."})
+ case errors.Is(err,auth.ErrInvalidCredentials):
+  return c.JSON(http.StatusUnauthorized,map[string]string{"message":"These credentials do not match our records."})
+ case err!=nil:
+  return err
+ }
+ user:=found.(*models.User)
+{{if eq .Auth "token"}} token,_,err:=h.Auth.Tokens.Issue(ctx,user,"api",[]string{"*"},30*24*time.Hour);if err!=nil{return err}
+ return c.JSON(http.StatusOK,map[string]any{"user":userJSON(user),"token":token})
+{{else}} if err=h.Auth.Guard.Login(c.Request,user);err!=nil{return err}
+ return c.JSON(http.StatusOK,map[string]any{"user":userJSON(user)})
+{{end}}}
+
+// Logout {{if eq .Auth "token"}}revokes the token used for this request{{else}}ends the session{{end}}.
+func (h Auth) Logout(c *golar.Context) error {
+{{if eq .Auth "token"}} token,ok:=auth.TokenFrom(c.Request.Context())
+ if ok{if err:=h.Auth.Tokens.Store.Delete(c.Request.Context(),token.ID);err!=nil{return err}}
+{{else}} if err:=h.Auth.Guard.Logout(c.Request);err!=nil{return err}
+{{end}} c.Status(http.StatusNoContent)
+ return nil
+}
+
+func (h Auth) Me(c *golar.Context) error {
+ user,ok:=auth.UserAs[*models.User](c.Request.Context())
+ if !ok{return &golar.HTTPError{Code: http.StatusUnauthorized}}
+ return c.JSON(http.StatusOK,userJSON(user))
+}
+{{if eq .Auth "session"}}
+// CSRF returns the session's CSRF token; send it as X-CSRF-Token on writes.
+func (h Auth) CSRF(c *golar.Context) error {
+ return c.JSON(http.StatusOK,map[string]string{"token":auth.CSRFToken(c.Request)})
+}
+{{end}}

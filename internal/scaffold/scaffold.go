@@ -3,9 +3,7 @@ package scaffold
 
 import (
 	"bytes"
-	"crypto/rand"
 	"embed"
-	"encoding/hex"
 	"fmt"
 	"go/format"
 	"io/fs"
@@ -23,7 +21,7 @@ import (
 //go:embed all:templates
 var templates embed.FS
 
-const FrameworkVersion = "v0.3.0"
+const FrameworkVersion = "v0.4.0"
 
 type Options struct {
 	Name, Module, Template, Database, Frontend, Auth string
@@ -33,8 +31,16 @@ type Options struct {
 
 type data struct {
 	Options
-	Token, Driver, DriverImport, DriverModule, DriverVersion, DSN string
-	Config                                                        string
+	Driver, DriverImport, DriverModule, DriverVersion, DSN string
+	Config                                                 string
+}
+
+// authFiles are rendered only when authentication is enabled.
+var authFiles = map[string]bool{
+	"app/models/user.go.tmpl":                                        true,
+	"app/handlers/auth.go.tmpl":                                      true,
+	"database/migrations/20260101_000000_create_users_table.go.tmpl": true,
+	"tests/auth_test.go.tmpl":                                        true,
 }
 
 var namePattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_-]*$`)
@@ -71,7 +77,7 @@ func Normalize(o Options) (Options, error) {
 		name, value string
 		allowed     []string
 	}{
-		{"template", o.Template, []string{"api", "web", "fullstack"}}, {"database", o.Database, []string{"none", "sqlite", "postgres", "mysql"}}, {"frontend", o.Frontend, []string{"none", "react", "vue", "svelte"}}, {"auth", o.Auth, []string{"none", "token"}},
+		{"template", o.Template, []string{"api", "web", "fullstack"}}, {"database", o.Database, []string{"none", "sqlite", "postgres", "mysql"}}, {"frontend", o.Frontend, []string{"none", "react", "vue", "svelte"}}, {"auth", o.Auth, []string{"none", "token", "session"}},
 	} {
 		found := false
 		for _, v := range choice.allowed {
@@ -117,14 +123,12 @@ func Render(options Options) (map[string][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	d := data{Options: o}
-	if o.Auth == "token" {
-		secret := make([]byte, 32)
-		if _, err = rand.Read(secret); err != nil {
-			return nil, err
-		}
-		d.Token = hex.EncodeToString(secret)
+	// Normalize also validates existing manifests, including legacy token
+	// projects without a database, so this check only applies to new projects.
+	if o.Auth != "none" && o.Database == "none" {
+		return nil, fmt.Errorf("%s authentication stores users in a database (choose sqlite, postgres or mysql)", o.Auth)
 	}
+	d := data{Options: o}
 	switch o.Database {
 	case "sqlite":
 		d.Driver = "sqlite"
@@ -174,7 +178,7 @@ func Render(options Options) (map[string][]byte, error) {
 		if strings.HasPrefix(relative, "internal/database/") && o.Database == "none" {
 			return nil
 		}
-		if strings.HasPrefix(relative, "internal/auth/") && o.Auth == "none" {
+		if o.Auth == "none" && (strings.HasPrefix(relative, "internal/auth/") || authFiles[relative]) {
 			return nil
 		}
 		body, e := templates.ReadFile(path)

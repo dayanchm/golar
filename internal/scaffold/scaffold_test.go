@@ -22,10 +22,16 @@ func TestTemplateMatrix(t *testing.T) {
 		}
 		for _, front := range fronts {
 			for _, db := range []string{"none", "sqlite", "postgres", "mysql"} {
-				for _, auth := range []string{"none", "token"} {
+				for _, auth := range []string{"none", "token", "session"} {
 					for _, docker := range []bool{false, true} {
 						t.Run(kind+"/"+front+"/"+db+"/"+auth+"/"+map[bool]string{false: "plain", true: "docker"}[docker], func(t *testing.T) {
 							files, err := Render(Options{Name: "demo", Module: "example.com/demo", Template: kind, Frontend: front, Database: db, Auth: auth, Docker: docker})
+							if auth != "none" && db == "none" {
+								if err == nil {
+									t.Fatal("auth without a database accepted")
+								}
+								return
+							}
 							if err != nil {
 								t.Fatal(err)
 							}
@@ -53,17 +59,16 @@ func TestTemplateMatrix(t *testing.T) {
 							if _, ok := files["internal/database/database.go"]; ok != (db != "none") {
 								t.Error("database choice ignored")
 							}
-							if _, ok := files["internal/auth/auth.go"]; ok != (auth != "none") {
-								t.Error("auth choice ignored")
+							for _, path := range []string{"internal/auth/auth.go", "app/models/user.go", "app/handlers/auth.go", "database/migrations/20260101_000000_create_users_table.go", "tests/auth_test.go"} {
+								if _, ok := files[path]; ok != (auth != "none") {
+									t.Errorf("auth choice ignored for %s", path)
+								}
 							}
-							if auth == "token" {
-								value := strings.TrimSpace(strings.Split(string(files[".env"]), "AUTH_TOKEN=")[1])
-								if len(value) != 64 {
-									t.Errorf("invalid token length %d", len(value))
-								}
-								if strings.Contains(string(files[".env.example"]), value) {
-									t.Error("secret leaked into example")
-								}
+							if strings.Contains(string(files[".env"]), "AUTH_TOKEN") {
+								t.Error("shared token still generated")
+							}
+							if strings.Contains(string(files[".env"]), "SESSION_SECURE_COOKIE") != (auth == "session") {
+								t.Error("session cookie setting mismatch")
 							}
 						})
 					}
@@ -137,7 +142,7 @@ func TestConflictingDestinations(t *testing.T) {
 }
 
 func TestInvalidOptions(t *testing.T) {
-	for _, o := range []Options{{Name: "../escape"}, {Name: "."}, {Name: "bad name"}, {Name: "demo", Module: "x\nreplace foo => bad"}, {Name: "demo", Module: "../bad"}, {Name: "demo", Template: "invalid"}, {Name: "demo", Database: "invalid"}, {Name: "demo", Frontend: "invalid"}, {Name: "demo", Auth: "invalid"}, {Name: "demo", Template: "api", Frontend: "vue"}, {Name: "demo", Template: "fullstack", Frontend: "none"}, {Name: "demo", FrameworkVersion: "latest\n"}, {Name: "demo", FrameworkDir: t.TempDir()}} {
+	for _, o := range []Options{{Name: "../escape"}, {Name: "."}, {Name: "bad name"}, {Name: "demo", Module: "x\nreplace foo => bad"}, {Name: "demo", Module: "../bad"}, {Name: "demo", Template: "invalid"}, {Name: "demo", Database: "invalid"}, {Name: "demo", Frontend: "invalid"}, {Name: "demo", Auth: "invalid"}, {Name: "demo", Auth: "token"}, {Name: "demo", Auth: "session"}, {Name: "demo", Template: "api", Frontend: "vue"}, {Name: "demo", Template: "fullstack", Frontend: "none"}, {Name: "demo", FrameworkVersion: "latest\n"}, {Name: "demo", FrameworkDir: t.TempDir()}} {
 		if _, err := Render(o); err == nil {
 			t.Errorf("accepted invalid options: %+v", o)
 		}
@@ -149,10 +154,10 @@ func TestFullStackDefaults(t *testing.T) {
 		t.Fatalf("options=%+v err=%v", o, err)
 	}
 }
-func TestTokenIsRandom(t *testing.T) {
-	a, _ := Render(Options{Name: "demo", Auth: "token"})
-	b, _ := Render(Options{Name: "demo", Auth: "token"})
-	if string(a[".env"]) == string(b[".env"]) {
-		t.Fatal("reused token")
+
+// Manifests of projects generated before v0.4.0 combine token auth with no database.
+func TestLegacyTokenManifest(t *testing.T) {
+	if _, err := Normalize(Options{Name: "demo", Auth: "token", Database: "none"}); err != nil {
+		t.Fatal(err)
 	}
 }

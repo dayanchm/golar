@@ -62,7 +62,8 @@ func (c *CLI) doctor(ctx context.Context, root string, config project.Config, en
 			check(name, err)
 		}
 	}
-	if config.Auth == "token" {
+	// Projects generated before v0.4.0 use a shared AUTH_TOKEN and no database.
+	if config.Auth == "token" && (config.Database == "none" || config.Database == "") {
 		found := false
 		for _, entry := range env {
 			if token, ok := strings.CutPrefix(entry, "AUTH_TOKEN="); ok && token != "" {

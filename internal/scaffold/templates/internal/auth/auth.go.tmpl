@@ -1,26 +1,84 @@
+// Package auth wires Golar's auth package to the application's users.
 package auth
 
 import (
- "crypto/sha256"
- "crypto/subtle"
  "net/http"
- "os"
- "strings"
+{{if eq .Auth "session"}} "os"
+{{end}} "time"
+
  "github.com/dayanchm/golar"
+ "github.com/dayanchm/golar/auth"
+{{if eq .Auth "session"}} "github.com/dayanchm/golar/http/session"
+{{end}} "{{.Module}}/app/models"
+ "{{.Module}}/internal/database"
 )
 
-// Middleware protects /api routes with a shared bearer token, not user sessions.
-func Middleware() golar.Middleware {
- return func(next http.Handler) http.Handler {
-  return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
-   if r.URL.Path!="/api"&&!strings.HasPrefix(r.URL.Path,"/api/"){next.ServeHTTP(w,r);return}
-   token:=os.Getenv("AUTH_TOKEN")
-   if token==""{http.Error(w,"Authentication is not configured",503);return}
-   value:=r.Header.Get("Authorization")
-   if !strings.HasPrefix(value,"Bearer "){w.Header().Set("WWW-Authenticate","Bearer");http.Error(w,"Unauthorized",401);return}
-   got,want:=sha256.Sum256([]byte(strings.TrimPrefix(value,"Bearer "))),sha256.Sum256([]byte(token))
-   if subtle.ConstantTimeCompare(got[:],want[:])!=1{w.Header().Set("WWW-Authenticate","Bearer");http.Error(w,"Unauthorized",401);return}
-   next.ServeHTTP(w,r)
+// Auth holds the guards and services shared by handlers and middleware.
+// Routes are registered before the database opens, so Init fills in the
+// database-backed parts during startup.
+type Auth struct {
+ Users *auth.ORMProvider[models.User]
+ Login *auth.Authenticator
+ // Throttle limits register and login requests per client IP.
+ Throttle *auth.Limiter
+{{if eq .Auth "token"}} Tokens *auth.TokenGuard
+{{else}} Sessions *session.Manager
+ Guard *auth.SessionGuard
+{{end}}}
+
+func New() *Auth {
+ users:=&auth.ORMProvider[models.User]{}
+ a:=&Auth{
+  Users: users,
+  Login: &auth.Authenticator{Provider: users,Limiter: auth.NewLimiter(5,time.Minute)},
+  Throttle: auth.NewLimiter(20,time.Minute),
+{{if eq .Auth "token"}}  Tokens: &auth.TokenGuard{Provider: users},
+{{else}}  Sessions: session.NewManager(),
+  Guard: &auth.SessionGuard{Provider: users},
+{{end}} }
+{{if eq .Auth "session"}} // Browsers only send Secure cookies over HTTPS, except on localhost.
+ a.Sessions.Insecure=os.Getenv("SESSION_SECURE_COOKIE")=="false"
+{{end}} return a
+}
+
+// Init connects the user provider{{if eq .Auth "token"}} and token store{{end}} to db.
+func (a *Auth) Init(db *database.DB) {
+ a.Users.DB=db
+{{if eq .Auth "token"}} a.Tokens.Store=&auth.SQLTokenStore{DB: db}
+{{end}}}
+
+// Guards returns the guards that authenticate requests, in order.
+func (a *Auth) Guards() []auth.Guard {
+{{if eq .Auth "token"}} return []auth.Guard{a.Tokens}
+{{else}} return []auth.Guard{a.Guard}
+{{end}}}
+{{if eq .Auth "session"}}
+// Middleware loads the session and checks the CSRF token on unsafe requests.
+func (a *Auth) Middleware() []golar.Middleware {
+ return []golar.Middleware{a.Sessions.Middleware,auth.CSRF}
+}
+{{end}}
+// Required rejects unauthenticated requests with 401 before handler runs.
+func (a *Auth) Required(handler golar.Handler) golar.Handler {
+ return With(handler,auth.Required(a.Guards()...))
+}
+
+// Throttled rejects clients that exceed Throttle with 429.
+func (a *Auth) Throttled(handler golar.Handler) golar.Handler {
+ return With(handler,auth.RateLimit(a.Throttle,nil))
+}
+
+// With runs standard middleware around a single Golar handler. Errors from
+// handler still reach the application's error handler.
+func With(handler golar.Handler,middleware ...func(http.Handler) http.Handler) golar.Handler {
+ return func(c *golar.Context) error {
+  var err error
+  var next http.Handler=http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+   c.Writer,c.Request=w,r
+   err=handler(c)
   })
+  for i:=len(middleware)-1;i>=0;i--{next=middleware[i](next)}
+  next.ServeHTTP(c.Writer,c.Request)
+  return err
  }
 }

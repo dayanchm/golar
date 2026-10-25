@@ -1,0 +1,31 @@
+package migrations
+
+import (
+ "github.com/dayanchm/golar/auth"
+ "github.com/dayanchm/golar/database/migrations"
+ "github.com/dayanchm/golar/database/schema"
+)
+
+// CreateUsersTable creates users plus the API token and password reset tables.
+type CreateUsersTable struct{}
+
+func (CreateUsersTable) Up(s *schema.Schema) error {
+ err:=s.Create("users",func(table *schema.Blueprint){
+  table.ID()
+  table.String("name",255)
+  table.String("email",191).Unique()
+  table.String("password",255)
+  table.Timestamps()
+ })
+ if err!=nil{return err}
+ return auth.CreateTables(s)
+}
+
+func (CreateUsersTable) Down(s *schema.Schema) error {
+ for _,table:=range []string{auth.ResetsTable,auth.TokensTable,"users"}{
+  if err:=s.DropIfExists(table);err!=nil{return err}
+ }
+ return nil
+}
+
+func init() {migrations.MustRegister("20260101_000000_create_users_table",CreateUsersTable{})}

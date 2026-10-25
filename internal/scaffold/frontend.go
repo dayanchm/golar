@@ -26,15 +26,14 @@ createRoot(document.getElementById('app')).render(<App />);
 		component = `import { useState } from 'react';
 export default function App() {
  const [message, setMessage] = useState('Your Golar frontend is ready.');
- const [token, setToken] = useState('');
  async function greet() {
   try {
-   const response = await fetch('/api/hello', { headers: token ? { Authorization: 'Bearer ' + token } : {} });
+   const response = await fetch('/api/hello');
    if (!response.ok) throw new Error(await response.text());
    setMessage((await response.json()).message);
   } catch (error) { setMessage(error.message); }
  }
- return <main><h1>Golar + React</h1><p>{message}</p><label>API token (if enabled)<input type="password" value={token} onChange={event => setToken(event.target.value)} /></label><button onClick={greet}>Call API</button></main>;
+ return <main><h1>Golar + React</h1><p>{message}</p><button onClick={greet}>Call API</button></main>;
 }
 `
 		files["frontend/src/App.jsx"] = []byte(component)
@@ -54,16 +53,15 @@ createApp(App).mount('#app');
 		component = `<script setup>
 import { ref } from 'vue';
 const message = ref('Your Golar frontend is ready.');
-const token = ref('');
 async function greet() {
  try {
-  const response = await fetch('/api/hello', { headers: token.value ? { Authorization: 'Bearer ' + token.value } : {} });
+  const response = await fetch('/api/hello');
   if (!response.ok) throw new Error(await response.text());
   message.value = (await response.json()).message;
  } catch (error) { message.value = error.message; }
 }
 </script>
-<template><main><h1>Golar + Vue</h1><p>{{ message }}</p><label>API token (if enabled)<input type="password" v-model="token" /></label><button @click="greet">Call API</button></main></template>
+<template><main><h1>Golar + Vue</h1><p>{{ message }}</p><button @click="greet">Call API</button></main></template>
 `
 		files["frontend/src/App.vue"] = []byte(component)
 		files["frontend/src/main.js"] = []byte(main)
@@ -81,16 +79,15 @@ mount(App, { target: document.getElementById('app') });
 `
 		component = `<script>
 let message = $state('Your Golar frontend is ready.');
-let token = $state('');
 async function greet() {
  try {
-  const response = await fetch('/api/hello', { headers: token ? { Authorization: 'Bearer ' + token } : {} });
+  const response = await fetch('/api/hello');
   if (!response.ok) throw new Error(await response.text());
   message = (await response.json()).message;
  } catch (error) { message = error.message; }
 }
 </script>
-<main><h1>Golar + Svelte</h1><p>{message}</p><label>API token (if enabled)<input type="password" bind:value={token} /></label><button onclick={greet}>Call API</button></main>
+<main><h1>Golar + Svelte</h1><p>{message}</p><button onclick={greet}>Call API</button></main>
 `
 		files["frontend/src/App.svelte"] = []byte(component)
 		files["frontend/src/main.js"] = []byte(main)

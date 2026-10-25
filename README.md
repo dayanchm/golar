@@ -34,7 +34,7 @@ golar serve --addr :8080
 | `--template` | `api`, `web`, `fullstack` | `api` |
 | `--database` | `none`, `sqlite`, `postgres`, `mysql` | `none` |
 | `--frontend` | `none`, `react`, `vue`, `svelte` | `react` for Full Stack; otherwise `none` |
-| `--auth` | `none`, `token` | `none` |
+| `--auth` | `none`, `token`, `session` (both need a database) | `none` |
 | `--docker` | boolean | false |
 | `--module` | Go module path | project name |
 | `--dir` | parent directory for new; project directory for other commands | current directory |
@@ -70,8 +70,12 @@ Database starters use `database/sql`, ping on startup and close on shutdown.
 SQLite creates its database file; PostgreSQL and MySQL require running services.
 Set `DATABASE_DSN` in `.env`. Run `golar migrate` to apply generated migrations;
 the query builder and ORM are described below.
-Token auth protects `/api` using a random shared bearer token stored only in
-`.env`; it does not provide user accounts, password login or JWT.
+`--auth token` and `--auth session` generate a `User` model, a users migration
+and `/api/auth/register`, `login`, `logout` and `me` routes built on the
+[auth package](docs/auth/README.md). Token projects issue personal access tokens
+for `Authorization: Bearer`; session projects use a session cookie with CSRF
+protection. Both rate limit login and registration. Run `golar migrate` before
+the first start. Projects generated before v0.4.0 keep their shared `AUTH_TOKEN`.
 
 With Docker selected, run `go mod tidy && go mod vendor`, then
 `docker compose up --build`. Docker builds use vendored Go modules, including
@@ -292,7 +296,7 @@ See [configuration](docs/database/configuration.md),
 New database-enabled scaffolds use the framework database package. Existing projects
 can continue with DATABASE_DSN and their existing startup code; generated migrations
 use the new package through the local framework replacement. The default scaffold
-framework version is v0.3.0, which requires publishing a tag for remote-only installs.
+framework version is v0.4.0, which requires publishing a tag for remote-only installs.
 
 Database CI runs real SQLite, PostgreSQL and MySQL migration/transaction/foreign-key
 tests with race detection against isolated test databases.
