@@ -295,3 +295,17 @@ func TestDatabaseRules(t *testing.T) {
 		t.Fatal(errs)
 	}
 }
+
+func TestFormTagKeys(t *testing.T) {
+	var input struct {
+		Name  string `form:"full_name" validate:"required"`
+		Email string `json:"email" form:"mail" validate:"required"`
+	}
+	var invalid *Error
+	if err := Validate(&input); !errors.As(err, &invalid) {
+		t.Fatalf("error = %v", err)
+	}
+	if len(invalid.Errors["full_name"]) == 0 || len(invalid.Errors["email"]) == 0 || len(invalid.Errors) != 2 {
+		t.Errorf("errors = %v, want full_name and email", invalid.Errors)
+	}
+}

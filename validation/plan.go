@@ -14,7 +14,7 @@ type structPlan struct {
 
 type fieldPlan struct {
 	index    int
-	key      string // JSON name, or the Go name without a json tag
+	key      string // json or form name, or the Go name without either tag
 	embedded bool
 	numeric  bool // the field has the numeric rule, so sizes compare values
 	rules    []boundRule
@@ -37,6 +37,9 @@ func (v *Validator) plan(t reflect.Type) (*structPlan, error) {
 			continue
 		}
 		name, _, _ := strings.Cut(sf.Tag.Get("json"), ",")
+		if name == "" {
+			name, _, _ = strings.Cut(sf.Tag.Get("form"), ",")
+		}
 		field := fieldPlan{index: i, key: name}
 		if name == "" || name == "-" {
 			field.key = sf.Name

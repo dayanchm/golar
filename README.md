@@ -15,8 +15,9 @@ the standard library: `net/http` handlers, `database/sql` connections and
 - **CLI and scaffolding:** `golar new` generates API, Web or Full Stack projects
   with an optional React, Vue or Svelte frontend, database, authentication and
   Docker setup.
-- **HTTP:** a router with groups and route priority, error-returning handlers,
-  a graceful server, and middleware for logging, recovery, request IDs, CORS,
+- **HTTP:** a router with groups and route priority, error-returning handlers
+  with a request context for JSON, forms, uploads, cookies and downloads, a
+  graceful server, and middleware for logging, recovery, request IDs, CORS,
   security headers, body limits, timeouts and gzip.
 - **Validation:** struct-tag rules with JSON `422` responses.
 - **Database:** SQLite, PostgreSQL and MySQL connections, migrations, a schema
@@ -173,8 +174,10 @@ Handlers receive `*golar.Context` and return an error:
 | --- | --- |
 | `&golar.HTTPError{Code: 404, Message: "Post not found"}` | that status and message |
 | `*validation.Error`, for example from `c.Validate` | `422 {"errors": {"field": ["message"]}}` |
-| `*http.MaxBytesError`, for example under `BodyLimit` | `413` |
-| malformed JSON from `c.Validate` | `400 Invalid request body` |
+| `*http.MaxBytesError`, from the body limits or `BodyLimit` | `413` |
+| `httpcontext.ErrUnsupportedMediaType` from `c.Bind` | `415` |
+| a body `c.Bind` cannot decode, or a missing upload | `400 Invalid request body` |
+| `*httpcontext.InputError`, for example from `c.QueryInt` | `400 Invalid query parameter "page"` |
 | anything else | logged, generic `500` |
 
 Once a response has started, later errors are only logged. Replace the handler
@@ -194,6 +197,35 @@ type RegisterRequest struct {
 Rules include `required`, `email`, `url`, `uuid`, `numeric`, `min`, `max`, `len`,
 `between`, `in`, `regex`, `confirmed`, `unique` and `exists`. Messages can be
 overridden and custom rules registered. See the [validation guide](docs/validation.md).
+
+## Request context
+
+```go
+app.Post("/avatar", func(c *golar.Context) error {
+    page, err := c.QueryInt("page", 1)
+    if err != nil {
+        return err // 400 Invalid query parameter "page"
+    }
+    file, err := c.File("avatar")
+    if err != nil {
+        return err // 400 when missing, 413 when too large
+    }
+    if err := c.SaveFile(file, filepath.Join("storage", "avatars", rand.Text())); err != nil {
+        return err
+    }
+    if err := c.SetCookie("last_page", strconv.Itoa(page), 24*time.Hour); err != nil {
+        return err
+    }
+    return c.Redirect(http.StatusSeeOther, "/profile")
+})
+```
+
+`c.Bind` and `c.Validate` read JSON, URL-encoded or multipart bodies. Bodies are
+limited to 4 MiB, or 32 MiB for multipart, unless changed with
+`app.SetContextConfig`. Responses include `JSON`, `String`, `HTML`, `Render`,
+`Blob`, `NoContent`, `Redirect` and `Download`; `c.IP()` honours
+`X-Forwarded-For` only from trusted proxies. See the
+[request context guide](docs/http/context.md).
 
 ## Router
 
@@ -338,7 +370,6 @@ auth mode ([scaffold.yml](.github/workflows/scaffold.yml)).
 ## Roadmap
 
 Planned work is tracked in [GitHub milestones](https://github.com/dayanchm/golar/milestones).
-Next for v0.5.0: a richer request context (forms, files, cookies and responses),
-a SQL session store and a mailer. AI-native tooling, such as a `golar mcp`
+Next for v0.5.0: a SQL session store and a mailer. AI-native tooling, such as a `golar mcp`
 command that exposes routes, schema and models to coding agents, is planned but
 not yet available.

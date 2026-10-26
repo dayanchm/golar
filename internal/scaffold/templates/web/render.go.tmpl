@@ -3,10 +3,10 @@ package web
 import (
  "embed"
  "html/template"
- "io"
 )
 
 //go:embed templates/*.html
 var files embed.FS
-var page=template.Must(template.ParseFS(files,"templates/index.html"))
-func Render(w io.Writer) error {return page.ExecuteTemplate(w,"index.html",nil)}
+
+// Templates holds the HTML templates; render them with c.Render.
+var Templates=template.Must(template.ParseFS(files,"templates/*.html"))

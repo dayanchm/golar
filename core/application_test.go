@@ -62,6 +62,8 @@ func TestHandlerErrors(t *testing.T) {
 		{"validation", fmt.Errorf("wrapped: %w", &validation.Error{Errors: validation.Errors{"name": {"The name field is required."}}}), 422, `{"errors":{"name":["The name field is required."]}}`},
 		{"bind", &httpcontext.BindError{Err: errors.New("unexpected EOF")}, 400, "Invalid request body\n"},
 		{"body too large", &httpcontext.BindError{Err: &http.MaxBytesError{Limit: 10}}, 413, "Request Entity Too Large\n"},
+		{"unsupported media type", &httpcontext.BindError{Err: httpcontext.ErrUnsupportedMediaType}, 415, "Unsupported Media Type\n"},
+		{"input", &httpcontext.InputError{Source: "query", Name: "page", Err: errors.New("not an integer")}, 400, "Invalid query parameter \"page\"\n"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			app := New()
@@ -217,4 +219,23 @@ func TestConcurrentRequests(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+func TestSetContextConfig(t *testing.T) {
+	app := New()
+	app.SetContextConfig(httpcontext.Config{MaxBodySize: 8})
+	app.Post("/", func(c *httpcontext.Context) error {
+		var body map[string]any
+		if err := c.Bind(&body); err != nil {
+			return err
+		}
+		return c.NoContent(http.StatusNoContent)
+	})
+	for body, want := range map[string]int{`{"a":1}`: 204, `{"name":"Ali Veli"}`: 413} {
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body)))
+		if rec.Code != want {
+			t.Errorf("POST %s = %d, want %d", body, rec.Code, want)
+		}
+	}
 }
