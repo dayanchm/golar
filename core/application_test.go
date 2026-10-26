@@ -8,11 +8,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 
 	httpcontext "github.com/dayanchm/golar/http/context"
 	"github.com/dayanchm/golar/http/middleware"
+	"github.com/dayanchm/golar/validation"
 )
 
 func TestApplicationRoutes(t *testing.T) {
@@ -57,6 +59,8 @@ func TestHandlerErrors(t *testing.T) {
 		{"http error", &HTTPError{Code: 400, Message: "Invalid name"}, 400, "Invalid name\n"},
 		{"wrapped", fmt.Errorf("wrapped: %w", &HTTPError{Code: 404}), 404, "Not Found\n"},
 		{"invalid code", &HTTPError{Code: 200, Message: "secret"}, 500, "Internal Server Error\n"},
+		{"validation", fmt.Errorf("wrapped: %w", &validation.Error{Errors: validation.Errors{"name": {"The name field is required."}}}), 422, `{"errors":{"name":["The name field is required."]}}`},
+		{"bind", &httpcontext.BindError{Err: errors.New("unexpected EOF")}, 400, "Invalid request body\n"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			app := New()
@@ -67,6 +71,35 @@ func TestHandlerErrors(t *testing.T) {
 				t.Fatalf("response = %d %q", rec.Code, rec.Body.String())
 			}
 		})
+	}
+}
+
+func TestContextValidate(t *testing.T) {
+	type request struct {
+		Email string `json:"email" validate:"required,email"`
+	}
+	app := New()
+	app.Post("/", func(c *httpcontext.Context) error {
+		var in request
+		if err := c.Validate(&in); err != nil {
+			return err
+		}
+		return c.String(201, in.Email)
+	})
+	for _, tt := range []struct {
+		body string
+		code int
+		want string
+	}{
+		{`{"email":"ada@example.com"}`, 201, "ada@example.com"},
+		{`{"email":"ada"}`, 422, `{"errors":{"email":["The email field must be a valid email address."]}}`},
+		{`{"email":`, 400, "Invalid request body\n"},
+	} {
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, httptest.NewRequest("POST", "/", strings.NewReader(tt.body)))
+		if rec.Code != tt.code || rec.Body.String() != tt.want {
+			t.Errorf("POST %s = %d %q, want %d %q", tt.body, rec.Code, rec.Body.String(), tt.code, tt.want)
+		}
 	}
 }
 

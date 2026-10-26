@@ -3,8 +3,8 @@
 > A modern, modular full-stack framework for Go, inspired by Laravel's developer experience.
 
 Golar ships a project generator and CLI, a router with middleware, a graceful HTTP
-server, migrations and a schema builder, a query builder, an ORM, sessions and
-authentication for SQLite, PostgreSQL and MySQL. See the [roadmap](#roadmap) for
+server, migrations and a schema builder, a query builder, an ORM, request
+validation, sessions and authentication for SQLite, PostgreSQL and MySQL. See the [roadmap](#roadmap) for
 planned features, including AI-native tooling.
 
 ## CLI and project scaffolding (v0.2.0)
@@ -154,6 +154,10 @@ Passing nil restores the default. Custom handlers are responsible for avoiding
 a second response after output has started. Register standard HTTP handlers with
 `app.Get("/legacy", golar.Adapt(existingHandler))`.
 Application route groups expose the same five method helpers as the router.
+
+`c.Validate(&req)` decodes a JSON body and checks its `validate` struct tags.
+The default error handler answers malformed JSON with 400 and invalid input with
+`422 {"errors": {"field": ["message"]}}`; see the [validation guide](docs/validation.md).
 
 ## Quality checks
 
@@ -349,7 +353,7 @@ rate limiting and CSRF protection are described in the
 ## Roadmap
 
 Planned work is tracked in [GitHub milestones](https://github.com/dayanchm/golar/milestones):
-validation, a richer request context, more middleware, a SQL session store and
+a richer request context, more middleware, a SQL session store and
 mail delivery are next. AI-native tooling, such as a `golar mcp` command that
 exposes routes, schema and models to coding agents, is planned but not yet
 available.

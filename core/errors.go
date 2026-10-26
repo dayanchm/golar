@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	httpcontext "github.com/dayanchm/golar/http/context"
+	"github.com/dayanchm/golar/validation"
 )
 
 // HTTPError is an intentional client-facing error. Message must be safe to expose.
@@ -24,10 +25,23 @@ func (e *HTTPError) Error() string {
 func (e *HTTPError) Unwrap() error { return e.Err }
 
 // DefaultErrorHandler logs errors and hides unexpected implementation details.
+// Validation errors become 422 JSON and undecodable bodies 400.
 // If the response has started, it logs the error without appending a second body.
 func DefaultErrorHandler(c *httpcontext.Context, err error) {
+	var invalid *validation.Error
+	if errors.As(err, &invalid) {
+		if w, ok := c.Writer.(*responseWriter); !ok || !w.committed {
+			_ = c.JSON(http.StatusUnprocessableEntity, map[string]validation.Errors{"errors": invalid.Errors})
+		}
+		return
+	}
 	log.Printf("handler error method=%s path=%q: %v", c.Request.Method, c.Request.URL.Path, err)
 	if w, ok := c.Writer.(*responseWriter); ok && w.committed {
+		return
+	}
+	var bindErr *httpcontext.BindError
+	if errors.As(err, &bindErr) {
+		http.Error(c.Writer, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 	code, message := http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError)
