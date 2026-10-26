@@ -28,6 +28,7 @@ type Application struct {
 	router       *router.Router
 	config       Config
 	errorHandler ErrorHandler
+	context      httpcontext.Config
 	startup      []Hook
 	shutdown     []Hook
 	started      atomic.Bool
@@ -53,10 +54,14 @@ func (a *Application) SetErrorHandler(handler ErrorHandler) {
 func (a *Application) OnStart(hook Hook)    { a.startup = append(a.startup, hook) }
 func (a *Application) OnShutdown(hook Hook) { a.shutdown = append(a.shutdown, hook) }
 
+// SetContextConfig sets body limits and trusted proxies for request contexts.
+// Call it before serving.
+func (a *Application) SetContextConfig(config httpcontext.Config) { a.context = config }
+
 func (a *Application) wrap(handler Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		writer := &responseWriter{ResponseWriter: w}
-		c := httpcontext.New(writer, r)
+		c := httpcontext.New(writer, r, a.context)
 		if err := handler(c); err != nil {
 			a.errorHandler(c, err)
 		}

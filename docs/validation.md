@@ -21,9 +21,10 @@ app.Post("/register", func(c *golar.Context) error {
 })
 ```
 
-`c.Validate` decodes the JSON body and validates it. With the default error
-handler, malformed JSON returns `400 Invalid request body` and invalid input
-returns `422` with the messages keyed by JSON field name:
+`c.Validate` binds the body with `c.Bind` (JSON, URL-encoded or multipart, by
+`Content-Type`) and validates it. With the default error handler, a body that
+cannot be decoded returns `400 Invalid request body`, an unsupported body type
+`415` and invalid input `422` with the messages keyed by field name:
 
 ```json
 {"errors": {"email": ["The email field must be a valid email address."]}}
@@ -60,10 +61,10 @@ As in Laravel, only `required` runs on missing or empty values: an optional
 `email` field may be left empty. Use a pointer, such as `*int`, to require a
 field that may legitimately be `0` or `false`.
 
-Fields are named by their `json` tag, or their Go name without one. Nested
-structs are validated with dotted keys such as `address.city`, unless the
-nested struct itself failed a rule. Embedded structs share the outer keys, as
-in `encoding/json`. Slices of structs are not validated element by element.
+Fields are named by their `json` tag, then their `form` tag, or their Go name
+without either. Nested structs are validated with dotted keys such as
+`address.city`, unless the nested struct itself failed a rule. Embedded
+structs share the outer keys, as in `encoding/json`. Slices of structs are not validated element by element.
 `validate:"-"` skips a field.
 
 Invalid tags, such as an unknown rule or `min=abc`, return an error the first

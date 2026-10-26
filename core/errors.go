@@ -2,6 +2,7 @@ package core
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -25,7 +26,8 @@ func (e *HTTPError) Error() string {
 func (e *HTTPError) Unwrap() error { return e.Err }
 
 // DefaultErrorHandler logs errors and hides unexpected implementation details.
-// Validation errors become 422 JSON, oversized bodies 413 and undecodable bodies 400.
+// Validation errors become 422 JSON, oversized bodies 413, unsupported body
+// types 415, and undecodable bodies and invalid input parameters 400.
 // If the response has started, it logs the error without appending a second body.
 func DefaultErrorHandler(c *httpcontext.Context, err error) {
 	var invalid *validation.Error
@@ -44,9 +46,18 @@ func DefaultErrorHandler(c *httpcontext.Context, err error) {
 		http.Error(c.Writer, http.StatusText(http.StatusRequestEntityTooLarge), http.StatusRequestEntityTooLarge)
 		return
 	}
+	if errors.Is(err, httpcontext.ErrUnsupportedMediaType) {
+		http.Error(c.Writer, http.StatusText(http.StatusUnsupportedMediaType), http.StatusUnsupportedMediaType)
+		return
+	}
 	var bindErr *httpcontext.BindError
 	if errors.As(err, &bindErr) {
 		http.Error(c.Writer, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	var inputErr *httpcontext.InputError
+	if errors.As(err, &inputErr) {
+		http.Error(c.Writer, fmt.Sprintf("Invalid %s parameter %q", inputErr.Source, inputErr.Name), http.StatusBadRequest)
 		return
 	}
 	code, message := http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError)

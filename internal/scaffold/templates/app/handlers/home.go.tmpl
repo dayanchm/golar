@@ -8,8 +8,7 @@ import (
 
 func Home(c *golar.Context) error {
 {{if eq .Template "api"}} return c.JSON(http.StatusOK,map[string]string{"name":"{{.Name}}","status":"ok"})
-{{else}} c.Header("Content-Type","text/html; charset=utf-8")
- return web.Render(c.Writer)
+{{else}} return c.Render(http.StatusOK,web.Templates,"index.html",nil)
 {{end}}}
 func Health(c *golar.Context) error {return c.JSON(http.StatusOK,map[string]string{"status":"ok"})}
 func Greeting(c *golar.Context) error {return c.JSON(http.StatusOK,map[string]string{"message":"Hello from {{.Name}}"})}
