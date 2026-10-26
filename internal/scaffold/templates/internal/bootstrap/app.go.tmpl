@@ -26,7 +26,14 @@ func build(db *database.DB) (*golar.Application,error) {
 {{else}}func New() (*golar.Application,error) {
 {{end}} if err:=config.LoadEnv(".env");err!=nil{return nil,err}
  app:=golar.New()
- app.Use(middleware.Logger(),middleware.Recovery())
+ app.Use(
+  middleware.RequestID(),
+  middleware.Logger(),
+  middleware.Recovery(),
+  middleware.SecureHeaders(),
+  middleware.BodyLimit(10<<20), // 10 MiB
+  middleware.Compress(),
+ )
 {{if ne .Frontend "none"}} app.Use(frontend()){{end}}
 {{if ne .Auth "none"}} a:=auth.New()
 {{if eq .Auth "session"}} app.Use(a.Middleware()...)

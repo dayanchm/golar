@@ -78,6 +78,13 @@ the frontend process to change the proxy target.
 `npm run build` creates frontend/dist; the Go backend serves it in production.
 Frontend HTML and assets are served by middleware and do not appear in the route list.
 {{end}}
+
+## Middleware
+
+internal/bootstrap/app.go adds request IDs, logging, panic recovery, security
+headers, a 10 MiB request body limit and gzip compression. Add
+`middleware.CORS` there if a frontend on another origin calls the API, and
+`middleware.Timeout` once handlers honor `r.Context()`.
 {{if .Docker}}
 ## Docker
 

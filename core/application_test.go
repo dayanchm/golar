@@ -61,6 +61,7 @@ func TestHandlerErrors(t *testing.T) {
 		{"invalid code", &HTTPError{Code: 200, Message: "secret"}, 500, "Internal Server Error\n"},
 		{"validation", fmt.Errorf("wrapped: %w", &validation.Error{Errors: validation.Errors{"name": {"The name field is required."}}}), 422, `{"errors":{"name":["The name field is required."]}}`},
 		{"bind", &httpcontext.BindError{Err: errors.New("unexpected EOF")}, 400, "Invalid request body\n"},
+		{"body too large", &httpcontext.BindError{Err: &http.MaxBytesError{Limit: 10}}, 413, "Request Entity Too Large\n"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			app := New()
