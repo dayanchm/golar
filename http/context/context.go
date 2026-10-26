@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+
+	"github.com/dayanchm/golar/validation"
 )
 
 type Context struct {
@@ -45,6 +47,24 @@ func (c *Context) String(code int, value string) error {
 
 func (c *Context) BindJSON(dst any) error {
 	return json.NewDecoder(c.Request.Body).Decode(dst)
+}
+
+// BindError reports a request body that could not be decoded. The default
+// error handler responds with 400 Bad Request.
+type BindError struct{ Err error }
+
+func (e *BindError) Error() string { return "invalid request body: " + e.Err.Error() }
+func (e *BindError) Unwrap() error { return e.Err }
+
+// Validate decodes the JSON body into dst and checks its `validate` tags with
+// validation.Default. It returns *BindError for malformed JSON and
+// *validation.Error, which the default error handler renders as 422, for
+// invalid input.
+func (c *Context) Validate(dst any) error {
+	if err := c.BindJSON(dst); err != nil {
+		return &BindError{Err: err}
+	}
+	return validation.ValidateContext(c.Request.Context(), dst)
 }
 
 func (c *Context) Header(name, value string) {
