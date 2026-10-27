@@ -16,6 +16,7 @@ func (CreateUsersTable) Up(s *schema.Schema) error {
   table.String("name",255)
   table.String("email",191).Unique()
   table.String("password",255)
+  table.Timestamp("email_verified_at").Nullable()
   table.Timestamps()
  })
  if err!=nil{return err}

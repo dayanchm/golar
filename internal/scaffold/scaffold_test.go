@@ -5,6 +5,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -69,6 +70,16 @@ func TestTemplateMatrix(t *testing.T) {
 							}
 							if strings.Contains(string(files[".env"]), "SESSION_SECURE_COOKIE") != (auth == "session") {
 								t.Error("session cookie setting mismatch")
+							}
+							key := regexp.MustCompile(`(?m)^APP_KEY=(\S*)$`).FindStringSubmatch(string(files[".env"]))
+							if (key != nil) != (auth != "none") || key != nil && len(key[1]) < 32 {
+								t.Errorf("APP_KEY = %q", key)
+							}
+							if strings.Contains(string(files[".env.example"]), "APP_KEY=\n") != (auth != "none") {
+								t.Error(".env.example must list APP_KEY without a value")
+							}
+							if strings.Contains(string(files[".env"]), "MAIL_DRIVER=log") != (auth != "none") {
+								t.Error("mail settings mismatch")
 							}
 						})
 					}

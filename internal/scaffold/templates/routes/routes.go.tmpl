@@ -19,4 +19,8 @@ func Register(app *golar.Application{{if ne .Auth "none"}},a *auth.Auth{{end}}) 
  account.Post("/login",a.Throttled(users.Login))
  account.Post("/logout",a.Required(users.Logout))
  account.Get("/me",a.Required(users.Me))
+ account.Post("/forgot-password",a.Throttled(users.ForgotPassword))
+ account.Post("/reset-password",a.Throttled(users.ResetPassword))
+ account.Post("/email/verification-notification",a.Throttled(a.Required(users.SendVerification)))
+ account.Get("/verify-email",a.Throttled(users.VerifyEmail))
 {{end}}}

@@ -2,15 +2,18 @@
 package auth
 
 import (
-{{if eq .Auth "session"}} "context"
-{{end}} "net/http"
-{{if eq .Auth "session"}} "os"
-{{end}} "time"
+ "context"
+ "fmt"
+ "net/http"
+ "os"
+ "strings"
+ "time"
 
  "github.com/dayanchm/golar"
  "github.com/dayanchm/golar/auth"
 {{if eq .Auth "session"}} "github.com/dayanchm/golar/http/session"
-{{end}} "{{.Module}}/app/models"
+{{end}} "github.com/dayanchm/golar/mail"
+ "{{.Module}}/app/models"
  "{{.Module}}/internal/database"
 )
 
@@ -20,14 +23,29 @@ import (
 type Auth struct {
  Users *auth.ORMProvider[models.User]
  Login *auth.Authenticator
- // Throttle limits register and login requests per client IP.
+ // Throttle limits register, login and password reset requests per client IP.
  Throttle *auth.Limiter
 {{if eq .Auth "token"}} Tokens *auth.TokenGuard
 {{else}} Sessions *session.Manager
  Guard *auth.SessionGuard
-{{end}}}
+{{end}} // Mailer sends password reset and verification emails, configured by MAIL_* in .env.
+ Mailer mail.Mailer
+ Resets *auth.PasswordBroker
+ Verification *auth.EmailVerification
+}
 
-func New() *Auth {
+// New configures authentication from the environment. A nil mailer uses
+// MAIL_DRIVER and the other MAIL_* variables.
+func New(mailer mail.Mailer) (*Auth,error) {
+ if mailer==nil{
+  var err error
+  if mailer,err=mail.FromEnv();err!=nil{return nil,err}
+ }
+ key:=os.Getenv("APP_KEY")
+ if len(key)<32{return nil,fmt.Errorf("APP_KEY must be at least 32 characters; generate one with: openssl rand -base64 32")}
+ appURL:=strings.TrimRight(os.Getenv("APP_URL"),"/")
+ if appURL==""{appURL="http://localhost:8080"}
+ appName:=os.Getenv("APP_NAME")
  users:=&auth.ORMProvider[models.User]{}
  a:=&Auth{
   Users: users,
@@ -36,16 +54,32 @@ func New() *Auth {
 {{if eq .Auth "token"}}  Tokens: &auth.TokenGuard{Provider: users},
 {{else}}  Sessions: session.NewManager(),
   Guard: &auth.SessionGuard{Provider: users},
-{{end}} }
+{{end}}  Mailer: mailer,
+  Resets: &auth.PasswordBroker{
+   Provider: users,
+   // The link opens APP_URL/reset-password?token=…&email=…; serve that page
+   // from your frontend and POST its form to /api/auth/reset-password.
+   Send: auth.PasswordResetMail{Mailer: mailer,URL: appURL+"/reset-password",AppName: appName}.Send,
+  },
+  Verification: &auth.EmailVerification{
+   Secret: []byte(key),
+   Provider: users,
+   Send: auth.VerificationMail{Mailer: mailer,URL: appURL+"/api/auth/verify-email",AppName: appName}.Send,
+  },
+ }
 {{if eq .Auth "session"}} // Browsers only send Secure cookies over HTTPS, except on localhost.
  a.Sessions.Insecure=os.Getenv("SESSION_SECURE_COOKIE")=="false"
-{{end}} return a
+{{end}} return a,nil
 }
 
-// Init connects the user provider{{if eq .Auth "token"}} and token store{{else}} and, unless SESSION_DRIVER=memory, the session store{{end}} to db.
+// Init connects the user provider, reset tokens{{if eq .Auth "token"}} and API tokens{{else}} and, unless SESSION_DRIVER=memory, sessions{{end}} to db.
 func (a *Auth) Init(db *database.DB) {
  a.Users.DB=db
-{{if eq .Auth "token"}} a.Tokens.Store=&auth.SQLTokenStore{DB: db}
+ a.Resets.Store=&auth.SQLResetStore{DB: db}
+{{if eq .Auth "token"}} tokens:=&auth.SQLTokenStore{DB: db}
+ a.Tokens.Store=tokens
+ // A password reset signs out every API client of that user.
+ a.Resets.OnReset=func(ctx context.Context,user auth.Authenticatable) error {return tokens.DeleteUser(ctx,user.AuthID())}
 {{else}} if os.Getenv("SESSION_DRIVER")!="memory"{a.Sessions.Store=&session.SQLStore{DB: db}}
 {{end}}}
 {{if eq .Auth "session"}}
@@ -54,7 +88,6 @@ func (a *Auth) PruneSessions(ctx context.Context) {
  if store,ok:=a.Sessions.Store.(*session.SQLStore);ok{store.PruneEvery(ctx,time.Hour)}
 }
 {{end}}
-
 // Guards returns the guards that authenticate requests, in order.
 func (a *Auth) Guards() []auth.Guard {
 {{if eq .Auth "token"}} return []auth.Guard{a.Tokens}

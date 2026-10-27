@@ -3,7 +3,9 @@ package scaffold
 
 import (
 	"bytes"
+	"crypto/rand"
 	"embed"
+	"encoding/base64"
 	"fmt"
 	"go/format"
 	"io/fs"
@@ -33,6 +35,9 @@ type data struct {
 	Options
 	Driver, DriverImport, DriverModule, DriverVersion, DSN string
 	Config                                                 string
+	// AppKey is a random secret written to .env for signing, such as email
+	// verification links.
+	AppKey string
 }
 
 // authFiles are rendered only when authentication is enabled.
@@ -128,7 +133,11 @@ func Render(options Options) (map[string][]byte, error) {
 	if o.Auth != "none" && o.Database == "none" {
 		return nil, fmt.Errorf("%s authentication stores users in a database (choose sqlite, postgres or mysql)", o.Auth)
 	}
-	d := data{Options: o}
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		return nil, err
+	}
+	d := data{Options: o, AppKey: base64.RawURLEncoding.EncodeToString(key)}
 	switch o.Database {
 	case "sqlite":
 		d.Driver = "sqlite"

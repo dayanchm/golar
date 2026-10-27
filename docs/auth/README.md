@@ -177,9 +177,8 @@ through `HasRoles`, for example a column or an ORM relation.
 broker := &auth.PasswordBroker{
     Provider: provider,                       // must implement auth.PasswordUpdater
     Store:    &auth.SQLResetStore{DB: db},
-    Send: func(ctx context.Context, u auth.Authenticatable, token string) error {
-        return mailer.Send(…, "https://app.example/reset?token="+token)
-    },
+    // or func(ctx, user, token) error for your own delivery
+    Send: auth.PasswordResetMail{Mailer: mailer, URL: "https://app.example/reset-password"}.Send,
     OnReset: func(ctx context.Context, u auth.Authenticatable) error {
         return tokenStore.DeleteUser(ctx, u.AuthID()) // log out API clients
     },
@@ -199,13 +198,14 @@ message whether or not the email exists.
 verification := &auth.EmailVerification{
     Secret:   []byte(os.Getenv("APP_KEY")), // at least 32 random bytes
     Provider: provider,                     // must implement auth.EmailVerifiedMarker
-    Send:     func(ctx context.Context, u auth.MustVerifyEmail, token string) error { … },
+    Send:     auth.VerificationMail{Mailer: mailer, URL: "https://app.example/api/auth/verify-email"}.Send,
 }
 err := verification.SendVerification(ctx, user)
 user, err := verification.Verify(ctx, token)
 ```
 
 Users implement `auth.MustVerifyEmail` (`AuthEmail()`, `EmailVerified()`).
+See the [mail guide](../mail.md) for drivers, templates and the link emails.
 Tokens are HMAC-SHA256 signed, expire after `TTL` (24 hours) and are bound to
 the current email address, so changing it invalidates outstanding links.
 

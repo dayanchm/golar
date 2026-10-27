@@ -2,6 +2,7 @@ package models
 
 import (
  "strconv"
+ "time"
 
  "github.com/dayanchm/golar/database/orm"
 )
@@ -12,7 +13,10 @@ type User struct {
  Name string `json:"name"`
  Email string `json:"email"`
  Password string `json:"-"`
+ EmailVerifiedAt *time.Time `json:"email_verified_at"`
 }
 
 func (u *User) AuthID() string {return strconv.FormatInt(u.ID,10)}
 func (u *User) AuthPassword() string {return u.Password}
+func (u *User) AuthEmail() string {return u.Email}
+func (u *User) EmailVerified() bool {return u.EmailVerifiedAt!=nil}
