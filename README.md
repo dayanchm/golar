@@ -25,6 +25,8 @@ the standard library: `net/http` handlers, `database/sql` connections and
   relationships and eager loading.
 - **Authentication:** Argon2id passwords, session and API token guards, CSRF,
   rate limiting, gates, policies, roles, password resets and email verification.
+- **Mail:** SMTP with STARTTLS, a log driver for development, a fake with test
+  assertions, templates and ready-made reset and verification emails.
 
 See the [roadmap](#roadmap) for what is coming next.
 
@@ -355,6 +357,22 @@ gates, policies, roles and permissions, password resets, email verification,
 rate limiting and CSRF protection are described in the
 [authentication guide](docs/auth/README.md).
 
+## Mail
+
+```go
+mailer, err := mail.FromEnv() // MAIL_DRIVER=smtp|log, MAIL_HOST, MAIL_FROM_ADDRESS, ...
+err = mailer.Send(ctx, mail.Message{To: []string{"ada@example.com"}, Subject: "Hi", Text: "Hello"})
+
+broker.Send = auth.PasswordResetMail{Mailer: mailer, URL: "https://app.example.com/reset-password"}.Send
+
+fake := mail.NewFake() // in tests
+fake.AssertSent(t, "ada@example.com")
+```
+
+Generated projects with authentication send password reset and verification
+emails from `.env` settings alone; they log mail until `MAIL_DRIVER=smtp` is
+set. See the [mail guide](docs/mail.md).
+
 ## Development
 
 ```sh
@@ -372,6 +390,6 @@ auth mode ([scaffold.yml](.github/workflows/scaffold.yml)).
 ## Roadmap
 
 Planned work is tracked in [GitHub milestones](https://github.com/dayanchm/golar/milestones).
-Next for v0.5.0: a mailer. AI-native tooling, such as a `golar mcp`
-command that exposes routes, schema and models to coding agents, is planned but
-not yet available.
+With the mailer, the planned v0.5.0 features are in place. AI-native tooling,
+such as a `golar mcp` command that exposes routes, schema and models to coding
+agents, is planned but not yet available.

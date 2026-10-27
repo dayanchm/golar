@@ -7,7 +7,8 @@ import (
  "github.com/dayanchm/golar/http/middleware"
  "{{.Module}}/internal/config"
  "{{.Module}}/routes"
-{{if ne .Auth "none"}} "{{.Module}}/internal/auth"{{end}}
+{{if ne .Auth "none"}} "{{.Module}}/internal/auth"
+ "github.com/dayanchm/golar/mail"{{end}}
 {{if ne .Frontend "none"}} "io/fs"
  "net/http"
  "os"
@@ -16,13 +17,19 @@ import (
 )
 
 {{if ne .Database "none"}}// New builds the application; the database opens when it starts.
-func New() (*golar.Application,error) {return build(nil)}
+func New() (*golar.Application,error) {return build(nil{{if ne .Auth "none"}},nil{{end}})}
 
 // NewWithDB builds the application on an already open database, for tests.
-// The caller closes db.
-func NewWithDB(db *database.DB) (*golar.Application,error) {return build(db)}
+// The caller closes db.{{if ne .Auth "none"}} Pass a mailer, such as mail.NewFake(), to capture
+// email instead of using MAIL_DRIVER.{{end}}
+func NewWithDB(db *database.DB{{if ne .Auth "none"}},mailer ...mail.Mailer{{end}}) (*golar.Application,error) {
+{{if ne .Auth "none"}} var m mail.Mailer
+ if len(mailer)>0{m=mailer[0]}
+ return build(db,m)
+{{else}} return build(db)
+{{end}}}
 
-func build(db *database.DB) (*golar.Application,error) {
+func build(db *database.DB{{if ne .Auth "none"}},mailer mail.Mailer{{end}}) (*golar.Application,error) {
 {{else}}func New() (*golar.Application,error) {
 {{end}} if err:=config.LoadEnv(".env");err!=nil{return nil,err}
  app:=golar.New()
@@ -35,7 +42,8 @@ func build(db *database.DB) (*golar.Application,error) {
   middleware.Compress(),
  )
 {{if ne .Frontend "none"}} app.Use(frontend()){{end}}
-{{if ne .Auth "none"}} a:=auth.New()
+{{if ne .Auth "none"}} a,err:=auth.New(mailer)
+ if err!=nil{return nil,err}
 {{if eq .Auth "session"}} app.Use(a.Middleware()...)
 {{end}} routes.Register(app,a)
 {{else}} routes.Register(app)

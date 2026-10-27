@@ -2,9 +2,17 @@ package tests
 
 import (
  "net/http/httptest"
+ "os"
  "testing"
  "{{.Module}}/internal/bootstrap"
+ "{{.Module}}/internal/config"
 )
+
+// TestMain loads the project's .env, since tests run in the tests directory.
+func TestMain(m *testing.M) {
+ if err:=config.LoadEnv("../.env");err!=nil{panic(err)}
+ os.Exit(m.Run())
+}
 
 func TestHealth(t *testing.T) {
  app,err:=bootstrap.New();if err!=nil{t.Fatal(err)}

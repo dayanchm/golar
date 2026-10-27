@@ -49,6 +49,10 @@ password reset tables{{end}}. Passwords are hashed with Argon2id.
 | `POST /api/auth/login` | Log in with `email` and `password` |
 | `POST /api/auth/logout` | Log out (requires authentication) |
 | `GET /api/auth/me` | The current user (requires authentication) |
+| `POST /api/auth/forgot-password` | Email a password reset link (`email`) |
+| `POST /api/auth/reset-password` | Set a new password (`email`, `token`, `password`) |
+| `POST /api/auth/email/verification-notification` | Email a new verification link (requires authentication) |
+| `GET /api/auth/verify-email?token=…` | Verify the email address from the link |
 
 {{if eq .Auth "token"}}Register and login return a personal access token. Send it as
 `Authorization: Bearer <token>`; tokens expire after 30 days and only their SHA-256
@@ -62,7 +66,21 @@ are shared between instances; expired rows are pruned hourly. Set
 `SESSION_SECURE_COOKIE=false` for local HTTP; remove it in production so the
 cookie requires HTTPS.
 {{end}}
-Register and login are rate limited per client IP, and failed logins per email.
+Registering sends a verification email. Reset links open
+`APP_URL/reset-password?token=…&email=…`; serve that page from your frontend and
+post its form to `/api/auth/reset-password`. Reset links expire after an hour
+and verification links after a day{{if eq .Auth "token"}}; a reset revokes the user's API tokens{{end}}.
+Wrap routes in `auth.RequireVerified` to require a verified address.
+
+Mail is configured in `.env`. `MAIL_DRIVER=log` prints messages, links
+included, to the server log. To deliver them, set `MAIL_DRIVER=smtp`,
+`MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`,
+`MAIL_ENCRYPTION` (`starttls`, `tls` or `none`) and `MAIL_FROM_ADDRESS`.
+`APP_KEY` signs verification links; `golar new` generated a random one, so keep
+`.env` private. Tests capture mail with `mail.NewFake()`; see
+tests/auth_test.go.
+
+Register, login and password reset are rate limited per client IP, and failed logins per email.
 Protect your own routes with `a.Required(handler)` in routes/routes.go. See the
 Golar authentication guide for gates, roles, password resets and email verification.
 {{end}}

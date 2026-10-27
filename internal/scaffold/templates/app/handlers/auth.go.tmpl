@@ -2,6 +2,7 @@ package handlers
 
 import (
  "errors"
+ "log"
  "net/http"
  "net/mail"
  "strconv"
@@ -15,7 +16,8 @@ import (
  appauth "{{.Module}}/internal/auth"
 )
 
-// Auth serves registration, login, logout and the current user.
+// Auth serves registration, login, logout, the current user, password resets
+// and email verification.
 type Auth struct{ Auth *appauth.Auth }
 
 type credentials struct {
@@ -38,7 +40,7 @@ func (in credentials) validate() map[string]string {
 }
 
 func userJSON(u *models.User) map[string]any {
- return map[string]any{"id":u.ID,"name":u.Name,"email":u.Email}
+ return map[string]any{"id":u.ID,"name":u.Name,"email":u.Email,"email_verified":u.EmailVerified()}
 }
 
 func (h Auth) Register(c *golar.Context) error {
@@ -53,6 +55,8 @@ func (h Auth) Register(c *golar.Context) error {
  hash,err:=auth.HashPassword(in.Password);if err!=nil{return err}
  user:=&models.User{Name: in.Name,Email: in.Email,Password: hash}
  if err=orm.Create(ctx,h.Auth.Users.DB,user);err!=nil{return err}
+ // The account works without a verified email; a failed send must not undo it.
+ if err:=h.Auth.Verification.SendVerification(ctx,user);err!=nil{log.Printf("send verification email to user %d: %v",user.ID,err)}
 {{if eq .Auth "token"}} token,_,err:=h.Auth.Tokens.Issue(ctx,user,"api",[]string{"*"},30*24*time.Hour);if err!=nil{return err}
  return c.JSON(http.StatusCreated,map[string]any{"user":userJSON(user),"token":token})
 {{else}} if err=h.Auth.Guard.Login(c.Request,user);err!=nil{return err}
@@ -102,3 +106,61 @@ func (h Auth) CSRF(c *golar.Context) error {
  return c.JSON(http.StatusOK,map[string]string{"token":auth.CSRFToken(c.Request)})
 }
 {{end}}
+
+type resetRequest struct {
+ Email string `json:"email"`
+ Token string `json:"token"`
+ Password string `json:"password"`
+}
+
+// ForgotPassword emails a reset link. The response is the same whether or not
+// the email is registered, so it cannot be used to find accounts.
+func (h Auth) ForgotPassword(c *golar.Context) error {
+ var in resetRequest
+ if err:=c.BindJSON(&in);err!=nil{return &golar.HTTPError{Code: http.StatusBadRequest,Message: "Invalid JSON body"}}
+ err:=h.Auth.Resets.SendResetLink(c.Request.Context(),strings.ToLower(strings.TrimSpace(in.Email)))
+ if errors.Is(err,auth.ErrThrottled){
+  return c.JSON(http.StatusTooManyRequests,map[string]string{"message":"Please wait before asking for another reset link."})
+ }
+ if err!=nil{return err}
+ return c.JSON(http.StatusAccepted,map[string]string{"message":"If that email is registered, a reset link is on its way."})
+}
+
+// ResetPassword sets a new password with the token from the reset email.
+func (h Auth) ResetPassword(c *golar.Context) error {
+ var in resetRequest
+ if err:=c.BindJSON(&in);err!=nil{return &golar.HTTPError{Code: http.StatusBadRequest,Message: "Invalid JSON body"}}
+ if len(in.Password)>1024{
+  return c.JSON(http.StatusUnprocessableEntity,map[string]any{"errors":map[string]string{"password":"The password may not exceed 1024 characters."}})
+ }
+ err:=h.Auth.Resets.Reset(c.Request.Context(),strings.ToLower(strings.TrimSpace(in.Email)),in.Token,in.Password)
+ switch {
+ case errors.Is(err,auth.ErrWeakPassword):
+  return c.JSON(http.StatusUnprocessableEntity,map[string]any{"errors":map[string]string{"password":"The password must be at least 8 characters."}})
+ case errors.Is(err,auth.ErrInvalidToken),errors.Is(err,auth.ErrExpiredToken):
+  return c.JSON(http.StatusUnprocessableEntity,map[string]any{"errors":map[string]string{"token":"This password reset link is invalid or has expired."}})
+ case err!=nil:
+  return err
+ }
+ return c.JSON(http.StatusOK,map[string]string{"message":"Your password has been reset."})
+}
+
+// SendVerification emails a new verification link to the current user.
+func (h Auth) SendVerification(c *golar.Context) error {
+ user,ok:=auth.UserAs[*models.User](c.Request.Context())
+ if !ok{return &golar.HTTPError{Code: http.StatusUnauthorized}}
+ if err:=h.Auth.Verification.SendVerification(c.Request.Context(),user);err!=nil{return err}
+ return c.JSON(http.StatusAccepted,map[string]string{"message":"A verification link is on its way."})
+}
+
+// VerifyEmail confirms an email address from the link in the verification email.
+func (h Auth) VerifyEmail(c *golar.Context) error {
+ _,err:=h.Auth.Verification.Verify(c.Request.Context(),c.Query("token"))
+ switch {
+ case errors.Is(err,auth.ErrInvalidToken),errors.Is(err,auth.ErrExpiredToken):
+  return c.JSON(http.StatusUnprocessableEntity,map[string]any{"errors":map[string]string{"token":"This verification link is invalid or has expired."}})
+ case err!=nil:
+  return err
+ }
+ return c.JSON(http.StatusOK,map[string]string{"message":"Your email address has been verified."})
+}
