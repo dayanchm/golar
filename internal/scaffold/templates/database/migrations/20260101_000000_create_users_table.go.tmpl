@@ -4,9 +4,10 @@ import (
  "github.com/dayanchm/golar/auth"
  "github.com/dayanchm/golar/database/migrations"
  "github.com/dayanchm/golar/database/schema"
-)
+{{if eq .Auth "session"}} "github.com/dayanchm/golar/http/session"
+{{end}})
 
-// CreateUsersTable creates users plus the API token and password reset tables.
+// CreateUsersTable creates users plus the API token{{if eq .Auth "session"}}, password reset and session{{else}} and password reset{{end}} tables.
 type CreateUsersTable struct{}
 
 func (CreateUsersTable) Up(s *schema.Schema) error {
@@ -18,11 +19,12 @@ func (CreateUsersTable) Up(s *schema.Schema) error {
   table.Timestamps()
  })
  if err!=nil{return err}
- return auth.CreateTables(s)
+{{if eq .Auth "session"}} if err:=session.CreateTables(s);err!=nil{return err}
+{{end}} return auth.CreateTables(s)
 }
 
 func (CreateUsersTable) Down(s *schema.Schema) error {
- for _,table:=range []string{auth.ResetsTable,auth.TokensTable,"users"}{
+ for _,table:=range []string{ {{- if eq .Auth "session"}}session.Table,{{end}}auth.ResetsTable,auth.TokensTable,"users"}{
   if err:=s.DropIfExists(table);err!=nil{return err}
  }
  return nil

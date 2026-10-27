@@ -47,6 +47,7 @@ func build(db *database.DB) (*golar.Application,error) {
   var err error
   db,err=database.Open(ctx)
 {{if ne .Auth "none"}}  if err==nil{a.Init(db)}
+{{end}}{{if eq .Auth "session"}}  if err==nil{go a.PruneSessions(ctx)}
 {{end}}  return err
  })
  app.OnShutdown(func(context.Context) error {if db!=nil{return db.Close()};return nil})

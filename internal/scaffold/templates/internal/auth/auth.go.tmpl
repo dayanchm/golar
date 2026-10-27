@@ -2,7 +2,8 @@
 package auth
 
 import (
- "net/http"
+{{if eq .Auth "session"}} "context"
+{{end}} "net/http"
 {{if eq .Auth "session"}} "os"
 {{end}} "time"
 
@@ -41,11 +42,18 @@ func New() *Auth {
 {{end}} return a
 }
 
-// Init connects the user provider{{if eq .Auth "token"}} and token store{{end}} to db.
+// Init connects the user provider{{if eq .Auth "token"}} and token store{{else}} and, unless SESSION_DRIVER=memory, the session store{{end}} to db.
 func (a *Auth) Init(db *database.DB) {
  a.Users.DB=db
 {{if eq .Auth "token"}} a.Tokens.Store=&auth.SQLTokenStore{DB: db}
+{{else}} if os.Getenv("SESSION_DRIVER")!="memory"{a.Sessions.Store=&session.SQLStore{DB: db}}
 {{end}}}
+{{if eq .Auth "session"}}
+// PruneSessions deletes expired database sessions every hour until ctx ends.
+func (a *Auth) PruneSessions(ctx context.Context) {
+ if store,ok:=a.Sessions.Store.(*session.SQLStore);ok{store.PruneEvery(ctx,time.Hour)}
+}
+{{end}}
 
 // Guards returns the guards that authenticate requests, in order.
 func (a *Auth) Guards() []auth.Guard {
