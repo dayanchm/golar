@@ -63,7 +63,7 @@ of hashing work, so responses do not reveal which accounts exist.
 ## Sessions
 
 ```go
-sessions := session.NewManager() // in-memory store, secure cookie defaults
+sessions := session.NewManager() // in-memory store, secure cookie defaults; see Session stores
 guard := &auth.SessionGuard{Provider: provider}
 
 app.Use(sessions.Middleware, auth.CSRF)
@@ -79,9 +79,33 @@ Session cookies are `HttpOnly`, `Secure` and `SameSite=Lax` by default. Set
 adopted, which prevents session fixation. Changing a user's password ends their
 existing sessions. Change the session before writing the response body.
 
-`session.MemoryStore` loses sessions on restart and is not shared between
-instances. Implement `session.Store` for Redis or a database in multi-instance
-deployments.
+### Session stores
+
+`session.NewManager()` uses `session.MemoryStore`, which loses sessions on
+restart and is not shared between instances. Use `session.SQLStore` in
+production and behind load balancers:
+
+```go
+// in a migration:
+err := session.CreateTables(schema) // a "sessions" table: id, payload, expires_at
+
+store := &session.SQLStore{DB: db} // Table defaults to "sessions"
+sessions := &session.Manager{Store: store}
+
+app.OnStart(func(ctx context.Context) error {
+    go store.PruneEvery(ctx, time.Hour) // delete expired rows until shutdown
+    return nil
+})
+```
+
+Rows are keyed by the SHA-256 of the session ID, like API tokens, so a leaked
+table does not contain usable cookies. Data is stored as JSON. Expired sessions
+never load; `store.Prune(ctx)` deletes them and returns how many were removed.
+SQLite, PostgreSQL and MySQL are supported; MySQL DSNs need `parseTime=true`.
+Implement `session.Store` for other backends such as Redis.
+
+Generated projects with session authentication create the table in their first
+migration and use the SQL store unless `SESSION_DRIVER=memory`.
 
 ## API tokens
 

@@ -38,8 +38,9 @@ apply them with `golar migrate`. Models in app/models use the Golar ORM.
 {{if ne .Auth "none"}}
 ## Authentication
 
-Run `golar migrate` first: it creates the users table plus the API token and
-password reset tables. Passwords are hashed with Argon2id.
+Run `golar migrate` first: it creates the users table plus the API token{{if eq .Auth "session"}},
+password reset and session tables{{else}} and
+password reset tables{{end}}. Passwords are hashed with Argon2id.
 
 | Route | Description |
 | --- | --- |
@@ -54,9 +55,12 @@ password reset tables. Passwords are hashed with Argon2id.
 hash is stored. Logout revokes the token that made the request.
 {{else}}Login stores the user in a server-side session cookie. Every POST, PUT,
 PATCH and DELETE request must send the token from `/api/auth/csrf` in the
-`X-CSRF-Token` header; logging in rotates it. Sessions are kept in memory, so
-they end when the server restarts. `.env` sets `SESSION_SECURE_COOKIE=false` for
-local HTTP; remove it in production so the cookie requires HTTPS.
+`X-CSRF-Token` header; logging in rotates it. Sessions are stored in the
+`sessions` table under the SHA-256 of their ID, so they survive restarts and
+are shared between instances; expired rows are pruned hourly. Set
+`SESSION_DRIVER=memory` to keep them in process memory instead. `.env` sets
+`SESSION_SECURE_COOKIE=false` for local HTTP; remove it in production so the
+cookie requires HTTPS.
 {{end}}
 Register and login are rate limited per client IP, and failed logins per email.
 Protect your own routes with `a.Required(handler)` in routes/routes.go. See the

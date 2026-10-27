@@ -340,7 +340,7 @@ Guides: [configuration](docs/database/configuration.md),
 ## Authentication
 
 ```go
-sessions := session.NewManager()
+sessions := &session.Manager{Store: &session.SQLStore{DB: db}} // or session.NewManager() in memory
 guard := &auth.SessionGuard{Provider: &auth.ORMProvider[User]{DB: db}}
 app.Use(sessions.Middleware, auth.CSRF)
 
@@ -348,6 +348,8 @@ user, err := (&auth.Authenticator{Provider: provider}).Attempt(ctx, email, passw
 err = guard.Login(r, user)
 ```
 
+Sessions can live in memory or in a SQL table that survives restarts and is
+shared between instances, with session IDs stored as SHA-256 hashes.
 Argon2id password hashing, session and bearer-token guards, route protection,
 gates, policies, roles and permissions, password resets, email verification,
 rate limiting and CSRF protection are described in the
@@ -362,14 +364,14 @@ go build ./...
 ```
 
 CI checks formatting, vet, tests with race detection, coverage and builds
-([ci.yml](.github/workflows/ci.yml)); runs the database, auth and validation
-tests against real SQLite, PostgreSQL and MySQL ([database.yml](.github/workflows/database.yml));
+([ci.yml](.github/workflows/ci.yml)); runs the database, auth, validation
+and session store tests against real SQLite, PostgreSQL and MySQL ([database.yml](.github/workflows/database.yml));
 and generates, migrates and tests projects for every template, frontend and
 auth mode ([scaffold.yml](.github/workflows/scaffold.yml)).
 
 ## Roadmap
 
 Planned work is tracked in [GitHub milestones](https://github.com/dayanchm/golar/milestones).
-Next for v0.5.0: a SQL session store and a mailer. AI-native tooling, such as a `golar mcp`
+Next for v0.5.0: a mailer. AI-native tooling, such as a `golar mcp`
 command that exposes routes, schema and models to coding agents, is planned but
 not yet available.

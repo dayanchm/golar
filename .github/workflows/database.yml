@@ -12,7 +12,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - run: go test -race ./database/... ./auth/... ./validation/...
+      - run: go test -race ./database/... ./auth/... ./validation/... ./http/session/...
       - run: go build ./...
   postgres:
     runs-on: ubuntu-latest
@@ -33,7 +33,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - run: go test -race ./database/... ./auth/... ./validation/...
+      - run: go test -race ./database/... ./auth/... ./validation/... ./http/session/...
         env:
           GOLAR_TEST_DRIVER: postgres
           GOLAR_TEST_DSN: postgres://golar:test-only@localhost:5432/golar_test?sslmode=disable
@@ -57,7 +57,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - run: go test -race ./database/... ./auth/... ./validation/...
+      - run: go test -race ./database/... ./auth/... ./validation/... ./http/session/...
         env:
           GOLAR_TEST_DRIVER: mysql
           GOLAR_TEST_DSN: golar:test-only@tcp(localhost:3306)/golar_test?parseTime=true
