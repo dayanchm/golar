@@ -32,17 +32,17 @@ See the [roadmap](#roadmap) for what is coming next.
 
 ## Requirements and installation
 
-Go 1.27 or newer. Install the CLI from a checkout of this repository:
+Go 1.27 or newer. Install the CLI:
 
 ```sh
-go install ./cmd/golar
+go install github.com/dayanchm/golar/cmd/golar@v0.5.0
 ```
 
-Make sure `$(go env GOPATH)/bin` is on your `PATH`, or run
-`go run ./cmd/golar help` from the repository.
-
-> No Golar version has been tagged yet. Until one is, generated projects use the
-> local checkout through a `replace` directive (see [Framework source](#framework-source)).
+Make sure `$(go env GOPATH)/bin` is on your `PATH`. From a checkout of this
+repository, `go install ./cmd/golar` installs the development version.
+Applications that only use the framework can add it with
+`go get github.com/dayanchm/golar@v0.5.0`. Changes are listed in
+[CHANGELOG.md](CHANGELOG.md).
 
 ## Quick start
 
@@ -153,9 +153,9 @@ project. It supports flat scalars and JSON, not nested YAML.
 ### Framework source
 
 Inside a Golar checkout the CLI detects the source tree and adds a `replace`
-directive; pass `--framework-dir /path/to/golar` to choose it explicitly. Once
-releases are published, `--framework-version v0.5.0` (the default) pins a tagged
-release instead. Remove local replacements before distributing a project.
+directive; pass `--framework-dir /path/to/golar` to choose it explicitly.
+Elsewhere, projects require the tagged release given by `--framework-version`
+(default `v0.5.0`). Remove local replacements before distributing a project.
 
 ## Applications and errors
 
