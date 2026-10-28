@@ -20,7 +20,7 @@ import (
 	"github.com/dayanchm/golar/internal/scaffold"
 )
 
-const Version = "0.5.0"
+const Version = "0.5.1"
 
 type CLI struct {
 	In       io.Reader
@@ -232,7 +232,18 @@ func localFramework() string {
 	if !ok {
 		return ""
 	}
+	return frameworkRoot(file)
+}
+
+// frameworkRoot returns the Golar checkout containing this source file. A
+// CLI installed with `go install ...@version` was compiled from the read-only
+// module cache (a "golar@v0.5.0" directory); that is not a checkout, so
+// projects require the published version instead.
+func frameworkRoot(file string) string {
 	root := filepath.Clean(filepath.Join(filepath.Dir(file), "../.."))
+	if strings.Contains(filepath.Base(root), "@") {
+		return ""
+	}
 	data, err := os.ReadFile(filepath.Join(root, "go.mod"))
 	if err == nil && strings.HasPrefix(string(data), "module github.com/dayanchm/golar\n") {
 		return root

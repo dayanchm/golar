@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.5.1 — 2026-10-28
+
+### Fixed
+
+- `golar new` from a CLI installed with `go install ...@v0.5.0` treated the
+  module cache as a local Golar checkout and wrote a `replace` directive to
+  it, so generated projects did not build on other machines. Installed CLIs
+  now require the published version; `--framework-dir` still selects a
+  checkout.
+- Generated projects default to `github.com/dayanchm/golar v0.5.1`, and
+  `golar version` reports `0.5.1`.
+
 ## v0.5.0 — 2026-10-28
 
 The first tagged release. Install the CLI with
