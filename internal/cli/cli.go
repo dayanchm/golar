@@ -20,7 +20,7 @@ import (
 	"github.com/dayanchm/golar/internal/scaffold"
 )
 
-const Version = "0.3.0-dev"
+const Version = "0.5.0"
 
 type CLI struct {
 	In       io.Reader
