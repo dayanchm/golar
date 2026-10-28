@@ -23,7 +23,7 @@ import (
 //go:embed all:templates
 var templates embed.FS
 
-const FrameworkVersion = "v0.5.0"
+const FrameworkVersion = "v0.5.1"
 
 type Options struct {
 	Name, Module, Template, Database, Frontend, Auth string

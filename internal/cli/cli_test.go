@@ -175,3 +175,23 @@ func TestMigrationGenerator(t *testing.T) {
 		t.Fatal(out.String())
 	}
 }
+
+func TestFrameworkRoot(t *testing.T) {
+	gomod := []byte("module github.com/dayanchm/golar\n\ngo 1.27.0\n")
+	checkout := filepath.Join(t.TempDir(), "golar")
+	cached := filepath.Join(t.TempDir(), "pkg", "mod", "github.com", "dayanchm", "golar@v0.5.0")
+	other := filepath.Join(t.TempDir(), "other")
+	for dir, mod := range map[string][]byte{checkout: gomod, cached: gomod, other: []byte("module example.com/other\n")} {
+		if err := os.MkdirAll(filepath.Join(dir, "internal", "cli"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "go.mod"), mod, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for dir, want := range map[string]string{checkout: checkout, cached: "", other: ""} {
+		if got := frameworkRoot(filepath.Join(dir, "internal", "cli", "cli.go")); got != want {
+			t.Errorf("frameworkRoot(%s) = %q, want %q", dir, got, want)
+		}
+	}
+}

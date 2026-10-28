@@ -35,13 +35,13 @@ See the [roadmap](#roadmap) for what is coming next.
 Go 1.27 or newer. Install the CLI:
 
 ```sh
-go install github.com/dayanchm/golar/cmd/golar@v0.5.0
+go install github.com/dayanchm/golar/cmd/golar@v0.5.1
 ```
 
 Make sure `$(go env GOPATH)/bin` is on your `PATH`. From a checkout of this
 repository, `go install ./cmd/golar` installs the development version.
 Applications that only use the framework can add it with
-`go get github.com/dayanchm/golar@v0.5.0`. Changes are listed in
+`go get github.com/dayanchm/golar@v0.5.1`. Changes are listed in
 [CHANGELOG.md](CHANGELOG.md).
 
 ## Quick start
@@ -155,7 +155,7 @@ project. It supports flat scalars and JSON, not nested YAML.
 Inside a Golar checkout the CLI detects the source tree and adds a `replace`
 directive; pass `--framework-dir /path/to/golar` to choose it explicitly.
 Elsewhere, projects require the tagged release given by `--framework-version`
-(default `v0.5.0`). Remove local replacements before distributing a project.
+(default `v0.5.1`). Remove local replacements before distributing a project.
 
 ## Applications and errors
 
