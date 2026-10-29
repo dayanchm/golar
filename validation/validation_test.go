@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/dayanchm/golar/database"
 )
@@ -307,5 +308,77 @@ func TestFormTagKeys(t *testing.T) {
 	}
 	if len(invalid.Errors["full_name"]) == 0 || len(invalid.Errors["email"]) == 0 || len(invalid.Errors) != 2 {
 		t.Errorf("errors = %v, want full_name and email", invalid.Errors)
+	}
+}
+
+func TestTypeAndFormatRules(t *testing.T) {
+	type input struct {
+		Name     any       `json:"name" validate:"string"`
+		Count    any       `json:"count" validate:"integer"`
+		Active   any       `json:"active" validate:"boolean"`
+		First    string    `json:"first" validate:"alpha"`
+		Handle   string    `json:"handle" validate:"alpha_num"`
+		Slug     string    `json:"slug" validate:"alpha_dash"`
+		Site     string    `json:"site" validate:"starts_with=http:// https://"`
+		File     string    `json:"file" validate:"ends_with=.png .jpg"`
+		Born     string    `json:"born" validate:"date"`
+		Due      string    `json:"due" validate:"date=02.01.2006"`
+		Starts   time.Time `json:"starts" validate:"date"`
+		Optional string    `json:"optional" validate:"alpha"`
+	}
+	valid := input{
+		Name: "Ayşe", Count: float64(3), Active: "1", First: "Ayşe", Handle: "user42", Slug: "my-post_1",
+		Site: "https://example.com", File: "a.png", Born: "1990-01-02", Due: "31.12.2026",
+		Starts: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+	}
+	if err := Validate(valid); err != nil {
+		t.Fatalf("valid input: %v", err)
+	}
+	for _, variant := range []any{int64(7), uint8(1), "12", "-4"} {
+		valid.Count = variant
+		if err := Validate(valid); err != nil {
+			t.Errorf("integer %#v: %v", variant, err)
+		}
+	}
+	for _, variant := range []any{true, false, 0, 1, "true", "0"} {
+		valid.Active = variant
+		if err := Validate(valid); err != nil {
+			t.Errorf("boolean %#v: %v", variant, err)
+		}
+	}
+	valid.Born = "2026-10-29T10:00:00Z"
+	if err := Validate(valid); err != nil {
+		t.Errorf("RFC 3339 date: %v", err)
+	}
+
+	invalid := input{
+		Name: 42, Count: 1.5, Active: "yes", First: "Ayşe1", Handle: "user 42", Slug: "my post",
+		Site: "ftp://example.com", File: "a.gif", Born: "02/01/1990", Due: "2026-12-31",
+		Starts: time.Time{}, Optional: "",
+	}
+	var verr *Error
+	if err := Validate(invalid); !errors.As(err, &verr) {
+		t.Fatalf("invalid input error = %v", err)
+	}
+	want := []string{"active", "born", "count", "due", "file", "first", "handle", "name", "site", "slug"}
+	got := slices.Sorted(maps.Keys(verr.Errors))
+	if !slices.Equal(got, want) {
+		t.Errorf("failing keys = %v, want %v", got, want)
+	}
+	if msg := verr.Errors["site"][0]; msg != "The site field must start with one of the following: http://, https://." {
+		t.Errorf("starts_with message = %q", msg)
+	}
+	for _, value := range []any{"12.5", "x", true, nil} {
+		invalid := struct {
+			V any `json:"v" validate:"required,integer"`
+		}{value}
+		if err := Validate(invalid); err == nil {
+			t.Errorf("integer accepted %#v", value)
+		}
+	}
+	for _, tag := range []string{"starts_with", "string=x", "alpha_dash=1"} {
+		if _, err := New().parseTag(tag); err == nil {
+			t.Errorf("tag %q accepted", tag)
+		}
 	}
 }

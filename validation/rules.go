@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -38,6 +40,15 @@ var defaultMessages = map[string]string{
 	"between.string":  "The :attribute field must be between :min and :max characters.",
 	"between.numeric": "The :attribute field must be between :min and :max.",
 	"between.array":   "The :attribute field must have between :min and :max items.",
+	"string":          "The :attribute field must be a string.",
+	"integer":         "The :attribute field must be an integer.",
+	"boolean":         "The :attribute field must be true or false.",
+	"alpha":           "The :attribute field must only contain letters.",
+	"alpha_num":       "The :attribute field must only contain letters and numbers.",
+	"alpha_dash":      "The :attribute field must only contain letters, numbers, dashes and underscores.",
+	"starts_with":     "The :attribute field must start with one of the following: :values.",
+	"ends_with":       "The :attribute field must end with one of the following: :values.",
+	"date":            "The :attribute field must be a valid date.",
 }
 
 var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
@@ -90,6 +101,31 @@ func builtinRules(v *Validator) map[string]Rule {
 			}
 			return reflect.DeepEqual(f.Value.Interface(), other.Interface()), nil
 		},
+		"string": func(_ context.Context, f Field) (bool, error) {
+			return f.Value.Kind() == reflect.String, nil
+		},
+		"integer": func(_ context.Context, f Field) (bool, error) {
+			return isInteger(f.Value), nil
+		},
+		"boolean": func(_ context.Context, f Field) (bool, error) {
+			return isBoolean(f.Value), nil
+		},
+		"alpha": stringRule(func(s string) bool {
+			return allRunes(s, func(r rune) bool { return unicode.IsLetter(r) || unicode.IsMark(r) })
+		}),
+		"alpha_num": stringRule(func(s string) bool {
+			return allRunes(s, func(r rune) bool { return unicode.IsLetter(r) || unicode.IsMark(r) || unicode.IsNumber(r) })
+		}),
+		"alpha_dash": stringRule(func(s string) bool {
+			return allRunes(s, func(r rune) bool {
+				return unicode.IsLetter(r) || unicode.IsMark(r) || unicode.IsNumber(r) || r == '-' || r == '_'
+			})
+		}),
+		"starts_with": affixRule(strings.HasPrefix),
+		"ends_with":   affixRule(strings.HasSuffix),
+		"date": func(_ context.Context, f Field) (bool, error) {
+			return isDate(f.Value, f.Param), nil
+		},
 		"unique": func(ctx context.Context, f Field) (bool, error) {
 			count, err := v.count(ctx, f)
 			return count == 0, err
@@ -99,6 +135,91 @@ func builtinRules(v *Validator) map[string]Rule {
 			return count > 0, err
 		},
 	}
+}
+
+// allRunes reports whether s is non-empty valid UTF-8 whose runes all pass ok.
+func allRunes(s string, ok func(rune) bool) bool {
+	if s == "" || !utf8.ValidString(s) {
+		return false
+	}
+	for _, r := range s {
+		if !ok(r) {
+			return false
+		}
+	}
+	return true
+}
+
+// affixRule passes strings that match any of the rule's space-separated values.
+func affixRule(match func(s, affix string) bool) Rule {
+	return func(_ context.Context, f Field) (bool, error) {
+		if f.Value.Kind() != reflect.String {
+			return false, nil
+		}
+		for _, affix := range strings.Fields(f.Param) {
+			if match(f.Value.String(), affix) {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
+}
+
+// isInteger accepts integer kinds, whole floats and strings holding a base-10 integer.
+func isInteger(v reflect.Value) bool {
+	switch v.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return true
+	case reflect.Float32, reflect.Float64:
+		n := v.Float()
+		return !math.IsInf(n, 0) && n == math.Trunc(n)
+	case reflect.String:
+		_, err := strconv.ParseInt(strings.TrimSpace(v.String()), 10, 64)
+		return err == nil
+	}
+	return false
+}
+
+// isBoolean accepts bools, 0 and 1, and the strings true, false, 1 and 0.
+func isBoolean(v reflect.Value) bool {
+	switch v.Kind() {
+	case reflect.Bool:
+		return true
+	case reflect.String:
+		switch v.String() {
+		case "true", "false", "1", "0":
+			return true
+		}
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return v.Int() == 0 || v.Int() == 1
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return v.Uint() <= 1
+	}
+	return false
+}
+
+var timeType = reflect.TypeFor[time.Time]()
+
+// isDate accepts non-zero time.Time values and strings in layout, or in
+// RFC 3339 or 2006-01-02 when layout is empty.
+func isDate(v reflect.Value, layout string) bool {
+	if v.Type() == timeType {
+		return !v.Interface().(time.Time).IsZero()
+	}
+	if v.Kind() != reflect.String {
+		return false
+	}
+	layouts := []string{time.RFC3339Nano, time.DateOnly}
+	if layout != "" {
+		layouts = []string{layout}
+	}
+	for _, l := range layouts {
+		if _, err := time.Parse(l, v.String()); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 func stringRule(check func(string) bool) Rule {
