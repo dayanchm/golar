@@ -16,8 +16,14 @@ type fieldPlan struct {
 	index    int
 	key      string // json or form name, or the Go name without either tag
 	embedded bool
-	numeric  bool // the field has the numeric rule, so sizes compare values
+	numeric  bool // the field has the numeric or integer rule, so sizes compare values
 	rules    []boundRule
+	// each holds the rules after "each", applied to every element of a slice,
+	// array or map; eachNumeric is numeric for those rules.
+	each        []boundRule
+	eachNumeric bool
+	// elements is set for slices, arrays and maps whose elements are structs.
+	elements bool
 }
 
 type boundRule struct {
@@ -56,23 +62,60 @@ func (v *Validator) plan(t reflect.Type) (*structPlan, error) {
 		if tag == "-" {
 			continue
 		}
-		rules, err := v.parseTag(tag)
+		own, each, hasEach := splitEach(tag)
+		rules, err := v.parseTag(own)
 		if err != nil {
 			return nil, fmt.Errorf("validation: %s.%s: %w", t, sf.Name, err)
 		}
-		if field.embedded && len(rules) > 0 {
+		elementRules, err := v.parseTag(each)
+		if err != nil {
+			return nil, fmt.Errorf("validation: %s.%s: each: %w", t, sf.Name, err)
+		}
+		if field.embedded && (len(rules) > 0 || hasEach) {
 			return nil, fmt.Errorf("validation: %s.%s: embedded structs cannot have rules", t, sf.Name)
 		}
-		for _, rule := range rules {
-			field.numeric = field.numeric || rule.name == "numeric"
+		switch indirectType(sf.Type).Kind() {
+		case reflect.Slice, reflect.Array, reflect.Map:
+			field.elements = indirectType(indirectType(sf.Type).Elem()).Kind() == reflect.Struct
+		default:
+			if hasEach {
+				return nil, fmt.Errorf("validation: %s.%s: each needs a slice, array or map", t, sf.Name)
+			}
 		}
-		field.rules = rules
-		if len(rules) > 0 || field.embedded || indirectType(sf.Type).Kind() == reflect.Struct {
+		for _, rule := range rules {
+			field.numeric = field.numeric || rule.name == "numeric" || rule.name == "integer"
+		}
+		for _, rule := range elementRules {
+			field.eachNumeric = field.eachNumeric || rule.name == "numeric" || rule.name == "integer"
+		}
+		field.rules, field.each = rules, elementRules
+		if len(rules) > 0 || len(elementRules) > 0 || field.embedded || field.elements || indirectType(sf.Type).Kind() == reflect.Struct {
 			plan.fields = append(plan.fields, field)
 		}
 	}
 	actual, _ := v.plans.LoadOrStore(t, plan)
 	return actual.(*structPlan), nil
+}
+
+// splitEach splits a tag at the "each" rule into the field's own rules and the
+// element rules. A regex rule takes the rest of the tag, so each must come first.
+func splitEach(tag string) (own, each string, found bool) {
+	offset, rest := 0, tag
+	for rest != "" {
+		if strings.HasPrefix(strings.TrimSpace(rest), "regex=") {
+			break
+		}
+		part, after, more := strings.Cut(rest, ",")
+		if strings.TrimSpace(part) == "each" {
+			return tag[:offset], after, true
+		}
+		if !more {
+			break
+		}
+		offset += len(part) + 1
+		rest = after
+	}
+	return tag, "", false
 }
 
 func indirectType(t reflect.Type) reflect.Type {

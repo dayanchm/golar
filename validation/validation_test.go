@@ -382,3 +382,86 @@ func TestTypeAndFormatRules(t *testing.T) {
 		}
 	}
 }
+
+func TestCollections(t *testing.T) {
+	type item struct {
+		SKU      string `json:"sku" validate:"required,alpha_dash"`
+		Quantity int    `json:"quantity" validate:"required,min=1"`
+	}
+	type order struct {
+		Items    []item            `json:"items" validate:"required,max=3"`
+		Pointers []*item           `json:"pointers"`
+		Fixed    [2]item           `json:"fixed"`
+		ByCode   map[string]item   `json:"by_code"`
+		Emails   []string          `json:"emails" validate:"max=3,each,required,email"`
+		Scores   []any             `json:"scores" validate:"each,integer,between=1 5"`
+		Labels   map[string]string `json:"labels" validate:"each,max=5"`
+	}
+	in := order{
+		Items:    []item{{SKU: "a-1", Quantity: 1}, {SKU: "b 2", Quantity: 0}},
+		Pointers: []*item{nil, {SKU: "", Quantity: 2}},
+		Fixed:    [2]item{{SKU: "x", Quantity: 1}, {SKU: "y"}},
+		ByCode:   map[string]item{"tr": {SKU: "t", Quantity: 1}, "en": {Quantity: 1}},
+		Emails:   []string{"ada@example.com", "", "nope"},
+		Scores:   []any{float64(3), 1.5, "9"},
+		Labels:   map[string]string{"en": "Hello", "tr": "Merhaba"},
+	}
+	var verr *Error
+	if err := Validate(in); !errors.As(err, &verr) {
+		t.Fatalf("error = %v", err)
+	}
+	want := map[string]string{
+		"items.1.sku":      "The sku field must only contain letters, numbers, dashes and underscores.",
+		"items.1.quantity": "The quantity field is required.",
+		"pointers.1.sku":   "The sku field is required.",
+		"fixed.1.quantity": "The quantity field is required.",
+		"by_code.en.sku":   "The sku field is required.",
+		"emails.1":         "The emails.1 field is required.",
+		"emails.2":         "The emails.2 field must be a valid email address.",
+		"scores.1":         "The scores.1 field must be an integer.",
+		"scores.2":         "The scores.2 field must be between 1 and 5.",
+		"labels.tr":        "The labels.tr field must not be greater than 5 characters.",
+	}
+	if len(verr.Errors) != len(want) {
+		t.Errorf("errors = %v", verr.Errors)
+	}
+	for key, message := range want {
+		if got := verr.Errors[key]; len(got) != 1 || got[0] != message {
+			t.Errorf("%s = %q, want %q", key, got, message)
+		}
+	}
+
+	// A collection that fails its own rules is not checked element by element.
+	tooMany := order{Items: make([]item, 4), Fixed: [2]item{{SKU: "a", Quantity: 1}, {SKU: "b", Quantity: 1}}}
+	if err := Validate(tooMany); !errors.As(err, &verr) || len(verr.Errors) != 1 || len(verr.Errors["items"]) != 1 {
+		t.Errorf("max items error = %v", err)
+	}
+
+	v := New()
+	v.Attributes["items.*.quantity"] = "item quantity"
+	v.Messages["emails.*.email"] = "Use a real address for :attribute."
+	err := v.Validate(order{Items: []item{{SKU: "a"}}, Emails: []string{"x"}})
+	if !errors.As(err, &verr) || verr.Errors["items.0.quantity"][0] != "The item quantity field is required." ||
+		verr.Errors["emails.0"][0] != "Use a real address for emails.0." {
+		t.Errorf("wildcard overrides = %v", err)
+	}
+
+	for _, bad := range []any{
+		struct {
+			V string `validate:"each,email"`
+		}{},
+		struct {
+			V []string `validate:"each,nope"`
+		}{},
+	} {
+		if err := New().Validate(bad); err == nil || errors.As(err, &verr) {
+			t.Errorf("%T: error = %v, want a tag error", bad, err)
+		}
+	}
+	regexEach := struct {
+		V string `json:"v" validate:"regex=^each$"`
+	}{"each"}
+	if err := Validate(regexEach); err != nil {
+		t.Errorf("each inside a regex: %v", err)
+	}
+}
