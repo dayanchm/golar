@@ -89,9 +89,16 @@ type Validator struct {
 	// Attributes replaces field names in messages, keyed by error key.
 	Attributes map[string]string
 
-	mu    sync.RWMutex
-	rules map[string]registeredRule
-	plans sync.Map // reflect.Type -> *structPlan
+	mu      sync.RWMutex
+	rules   map[string]registeredRule
+	plans   sync.Map // reflect.Type -> *structPlan
+	locales map[string]*locale
+}
+
+// pass is the state of one validation run.
+type pass struct {
+	errs   Errors
+	locale *locale // nil for English
 }
 
 type registeredRule struct {
@@ -101,7 +108,8 @@ type registeredRule struct {
 
 // New returns a validator with the built-in rules.
 func New() *Validator {
-	v := &Validator{Messages: map[string]string{}, Attributes: map[string]string{}, rules: map[string]registeredRule{}}
+	v := &Validator{Messages: map[string]string{}, Attributes: map[string]string{}, rules: map[string]registeredRule{}, locales: map[string]*locale{}}
+	v.AddLocale("tr", turkish, nil)
 	for name, rule := range builtinRules(v) {
 		v.rules[name] = registeredRule{rule: rule}
 	}
@@ -146,19 +154,20 @@ func (v *Validator) ValidateContext(ctx context.Context, value any) error {
 	if rv.Kind() != reflect.Struct {
 		return fmt.Errorf("validation: expected a struct, got %T", value)
 	}
-	errs := Errors{}
-	if err := v.check(ctx, rv, "", errs, 0); err != nil {
+	_, l := v.lookupLocale(LocaleFrom(ctx))
+	p := &pass{errs: Errors{}, locale: l}
+	if err := v.check(ctx, rv, "", p, 0); err != nil {
 		return err
 	}
-	if len(errs) > 0 {
-		return &Error{Errors: errs}
+	if len(p.errs) > 0 {
+		return &Error{Errors: p.errs}
 	}
 	return nil
 }
 
 const maxDepth = 32
 
-func (v *Validator) check(ctx context.Context, rv reflect.Value, prefix string, errs Errors, depth int) error {
+func (v *Validator) check(ctx context.Context, rv reflect.Value, prefix string, p *pass, depth int) error {
 	if depth > maxDepth {
 		return fmt.Errorf("validation: %s nests more than %d structs", rv.Type(), maxDepth)
 	}
@@ -172,14 +181,14 @@ func (v *Validator) check(ctx context.Context, rv reflect.Value, prefix string, 
 		if field.embedded {
 			// Embedded structs share the outer struct's keys, as in encoding/json.
 			if present && value.Kind() == reflect.Struct {
-				if err := v.check(ctx, value, prefix, errs, depth+1); err != nil {
+				if err := v.check(ctx, value, prefix, p, depth+1); err != nil {
 					return err
 				}
 			}
 			continue
 		}
 		key := prefix + field.key
-		f := Field{Name: key, Attribute: v.attribute(key), Value: value, Parent: rv, plan: plan, numeric: field.numeric,
+		f := Field{Name: key, Attribute: v.attribute(key, p.locale), Value: value, Parent: rv, plan: plan, numeric: field.numeric,
 			pointer: raw.Kind() == reflect.Pointer || raw.Kind() == reflect.Interface}
 		// Like Laravel, only required runs on missing or empty values.
 		missing := f.missing()
@@ -193,20 +202,20 @@ func (v *Validator) check(ctx context.Context, rv reflect.Value, prefix string, 
 				return fmt.Errorf("validation: %s %s: %w", key, bound.name, err)
 			}
 			if !ok {
-				errs[key] = append(errs[key], v.message(f, bound))
+				p.errs[key] = append(p.errs[key], v.message(f, bound, p.locale))
 			}
 		}
-		if !present || len(errs[key]) > 0 {
+		if !present || len(p.errs[key]) > 0 {
 			continue
 		}
 		switch value.Kind() {
 		case reflect.Struct:
-			if err := v.check(ctx, value, key+".", errs, depth+1); err != nil {
+			if err := v.check(ctx, value, key+".", p, depth+1); err != nil {
 				return err
 			}
 		case reflect.Slice, reflect.Array, reflect.Map:
 			if len(field.each) > 0 || field.elements {
-				if err := v.checkElements(ctx, value, key, field, rv, plan, errs, depth); err != nil {
+				if err := v.checkElements(ctx, value, key, field, rv, plan, p, depth); err != nil {
 					return err
 				}
 			}
@@ -218,7 +227,7 @@ func (v *Validator) check(ctx context.Context, rv reflect.Value, prefix string, 
 // checkElements validates each element of a slice, array or map under keys
 // such as "items.0" or "labels.en": first the each rules, then, for structs,
 // their own fields.
-func (v *Validator) checkElements(ctx context.Context, collection reflect.Value, key string, field fieldPlan, parent reflect.Value, plan *structPlan, errs Errors, depth int) error {
+func (v *Validator) checkElements(ctx context.Context, collection reflect.Value, key string, field fieldPlan, parent reflect.Value, plan *structPlan, p *pass, depth int) error {
 	type element struct {
 		key   string
 		value reflect.Value
@@ -237,7 +246,7 @@ func (v *Validator) checkElements(ctx context.Context, collection reflect.Value,
 	}
 	for _, e := range elements {
 		value, present := indirect(e.value)
-		f := Field{Name: e.key, Attribute: v.elementAttribute(e.key), Value: value, Parent: parent, plan: plan, numeric: field.eachNumeric,
+		f := Field{Name: e.key, Attribute: v.elementAttribute(e.key, p.locale), Value: value, Parent: parent, plan: plan, numeric: field.eachNumeric,
 			pointer: e.value.Kind() == reflect.Pointer || e.value.Kind() == reflect.Interface}
 		missing := f.missing()
 		for _, bound := range field.each {
@@ -250,11 +259,11 @@ func (v *Validator) checkElements(ctx context.Context, collection reflect.Value,
 				return fmt.Errorf("validation: %s %s: %w", e.key, bound.name, err)
 			}
 			if !ok {
-				errs[e.key] = append(errs[e.key], v.message(f, bound))
+				p.errs[e.key] = append(p.errs[e.key], v.message(f, bound, p.locale))
 			}
 		}
-		if present && value.Kind() == reflect.Struct && len(errs[e.key]) == 0 {
-			if err := v.check(ctx, value, e.key+".", errs, depth+1); err != nil {
+		if present && value.Kind() == reflect.Struct && len(p.errs[e.key]) == 0 {
+			if err := v.check(ctx, value, e.key+".", p, depth+1); err != nil {
 				return err
 			}
 		}
@@ -276,16 +285,16 @@ func wildcard(key string) string {
 
 // attribute names a field in messages: Attributes by key or wildcard key,
 // else the last key segment.
-func (v *Validator) attribute(key string) string {
-	if name, ok := v.configuredAttribute(key); ok {
+func (v *Validator) attribute(key string, l *locale) string {
+	if name, ok := v.configuredAttribute(key, l); ok {
 		return name
 	}
 	return strings.ReplaceAll(key[strings.LastIndex(key, ".")+1:], "_", " ")
 }
 
 // elementAttribute names a collection element with its parent, as in "tags.0".
-func (v *Validator) elementAttribute(key string) string {
-	if name, ok := v.configuredAttribute(key); ok {
+func (v *Validator) elementAttribute(key string, l *locale) string {
+	if name, ok := v.configuredAttribute(key, l); ok {
 		return name
 	}
 	segments := strings.Split(key, ".")
@@ -295,8 +304,14 @@ func (v *Validator) elementAttribute(key string) string {
 	return strings.ReplaceAll(strings.Join(segments, "."), "_", " ")
 }
 
-func (v *Validator) configuredAttribute(key string) (string, bool) {
+// configuredAttribute looks up Attributes, preferring the locale's names.
+func (v *Validator) configuredAttribute(key string, l *locale) (string, bool) {
 	for _, k := range []string{key, wildcard(key)} {
+		if l != nil {
+			if name, ok := l.attributes[k]; ok {
+				return name, true
+			}
+		}
 		if name, ok := v.Attributes[k]; ok {
 			return name, true
 		}
@@ -304,14 +319,28 @@ func (v *Validator) configuredAttribute(key string) (string, bool) {
 	return "", false
 }
 
-func (v *Validator) message(f Field, bound boundRule) string {
+// message finds the text for a failed rule: the locale's entries, then
+// Messages, the rule's registered message and the English defaults. Each
+// source is searched from the most specific key ("email.unique") to the rule
+// name ("unique"). The locale's "invalid" entry replaces the generic message.
+func (v *Validator) message(f Field, bound boundRule, l *locale) string {
 	kind := sizeKind(f)
 	keys := []string{f.Name + "." + bound.name, wildcard(f.Name) + "." + bound.name, bound.name + "." + kind, bound.name}
 	text := ""
+	if l != nil {
+		for _, key := range keys {
+			if message, ok := l.messages[key]; ok {
+				text = message
+				break
+			}
+		}
+	}
 	for _, key := range keys {
+		if text != "" {
+			break
+		}
 		if message, ok := v.Messages[key]; ok {
 			text = message
-			break
 		}
 	}
 	if text == "" {
@@ -321,6 +350,8 @@ func (v *Validator) message(f Field, bound boundRule) string {
 		if message, ok := defaultMessages[bound.name+"."+kind]; ok {
 			text = message
 		} else if message, ok := defaultMessages[bound.name]; ok {
+			text = message
+		} else if message, ok := l.lookup("invalid"); ok {
 			text = message
 		} else {
 			text = "The :attribute field is invalid."
