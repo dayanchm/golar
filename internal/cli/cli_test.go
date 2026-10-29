@@ -195,3 +195,46 @@ func TestFrameworkRoot(t *testing.T) {
 		}
 	}
 }
+
+func TestRequestGenerator(t *testing.T) {
+	for value, want := range map[string]string{
+		"StorePost": "StorePostRequest", "store_post": "StorePostRequest", "update-user-request": "UpdateUserRequest", "Login": "LoginRequest",
+	} {
+		if got, _, err := requestNames(value); err != nil || got != want {
+			t.Errorf("requestNames(%q) = %q, %v", value, got, err)
+		}
+	}
+	for _, bad := range []string{"", "request", "9post", "post/../x", "gönder"} {
+		if _, _, err := requestNames(bad); err == nil {
+			t.Errorf("requestNames(%q) succeeded", bad)
+		}
+	}
+
+	c, out := testCLI(t)
+	target, err := scaffold.Create(c.Dir, scaffold.Options{Name: "demo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = c.Run(context.Background(), []string{"make:request", "StorePost", "--dir", target}); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(target, "app", "requests", "store_post_request.go")
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"package requests", "type StorePostRequest struct", "func (r *StorePostRequest) Authorize(c *golar.Context) error", "func (r *StorePostRequest) Prepare(c *golar.Context) error"} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf("generated request lacks %q:\n%s", want, body)
+		}
+	}
+	if err = c.Run(context.Background(), []string{"make:request", "store_post", "--dir", target}); err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("duplicate request: %v", err)
+	}
+	if !strings.Contains(out.String(), "Created "+path) {
+		t.Fatal(out.String())
+	}
+	if err = c.Run(context.Background(), []string{"make:request", "Other", "--dir", t.TempDir()}); err == nil {
+		t.Fatal("generated a request outside a Golar project")
+	}
+}
