@@ -62,6 +62,7 @@ func TestHandlerErrors(t *testing.T) {
 		{"validation", fmt.Errorf("wrapped: %w", &validation.Error{Errors: validation.Errors{"name": {"The name field is required."}}}), 422, `{"errors":{"name":["The name field is required."]}}`},
 		{"bind", &httpcontext.BindError{Err: errors.New("unexpected EOF")}, 400, "Invalid request body\n"},
 		{"body too large", &httpcontext.BindError{Err: &http.MaxBytesError{Limit: 10}}, 413, "Request Entity Too Large\n"},
+		{"forbidden form request", fmt.Errorf("wrapped: %w", httpcontext.ErrForbidden), 403, "Forbidden\n"},
 		{"unsupported media type", &httpcontext.BindError{Err: httpcontext.ErrUnsupportedMediaType}, 415, "Unsupported Media Type\n"},
 		{"input", &httpcontext.InputError{Source: "query", Name: "page", Err: errors.New("not an integer")}, 400, "Invalid query parameter \"page\"\n"},
 	} {

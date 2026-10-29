@@ -44,6 +44,14 @@ for an invalid tag or a failing database query.
 | `url` | the string is an absolute URL with a scheme and host |
 | `uuid` | the string is a UUID in 8-4-4-4-12 form |
 | `numeric` | the value is a number or a string that parses as one |
+| `string` | the value is a string, for `any` fields holding decoded JSON |
+| `integer` | the value is an integer, a whole float such as `3.0`, or a string such as `"12"` |
+| `boolean` | the value is a bool, `0` or `1`, or the string `true`, `false`, `1` or `0` |
+| `alpha` | the string contains only letters, including non-ASCII ones such as `ş` |
+| `alpha_num` | the string contains only letters and digits |
+| `alpha_dash` | the string contains only letters, digits, `-` and `_` |
+| `starts_with=a b`, `ends_with=a b` | the string starts or ends with one of the space-separated values |
+| `date` | the value is a non-zero `time.Time`, or a string in RFC 3339 or `2006-01-02` form; `date=02.01.2006` takes a Go layout |
 | `min=n`, `max=n` | the size is at least or at most `n` |
 | `len=n` | the size is exactly `n` |
 | `between=a b` | the size is between `a` and `b`, inclusive |
@@ -54,8 +62,8 @@ for an invalid tag or a failing database query.
 | `exists=table.column` | at least one row has this value |
 
 Size means characters for strings, the value for numbers, and the length for
-slices, arrays and maps. A string with the `numeric` rule is sized by its value,
-so `numeric,min=18` compares numbers.
+slices, arrays and maps. A string with the `numeric` or `integer` rule is sized
+by its value, so `numeric,min=18` compares numbers.
 
 As in Laravel, only `required` runs on missing or empty values: an optional
 `email` field may be left empty. Use a pointer, such as `*int`, to require a
@@ -64,8 +72,35 @@ field that may legitimately be `0` or `false`.
 Fields are named by their `json` tag, then their `form` tag, or their Go name
 without either. Nested structs are validated with dotted keys such as
 `address.city`, unless the nested struct itself failed a rule. Embedded
-structs share the outer keys, as in `encoding/json`. Slices of structs are not validated element by element.
-`validate:"-"` skips a field.
+structs share the outer keys, as in `encoding/json`. `validate:"-"` skips a
+field.
+
+## Arrays and maps
+
+Structs inside slices, arrays and maps are validated element by element, with
+the index or map key in the error key:
+
+```go
+type Order struct {
+    Items  []Item   `json:"items" validate:"required,max=50"`
+    Emails []string `json:"emails" validate:"max=3,each,required,email"`
+}
+type Item struct {
+    SKU      string `json:"sku" validate:"required,alpha_dash"`
+    Quantity int    `json:"quantity" validate:"required,min=1"`
+}
+```
+
+```json
+{"errors": {
+  "items.1.quantity": ["The quantity field is required."],
+  "emails.0": ["The emails.0 field must be a valid email address."]
+}}
+```
+
+Rules after `each` apply to every element; rules before it apply to the
+collection itself. When the collection fails its own rules, its elements are
+not checked. `each` must come before a `regex` rule.
 
 Invalid tags, such as an unknown rule or `min=abc`, return an error the first
 time the type is validated.
@@ -94,7 +129,86 @@ v.Messages["email.unique"] = "This email is already registered."   // field.rule
 v.Messages["min.string"] = "The :attribute needs :param characters." // rule.kind: string, numeric or array
 v.Messages["required"] = ":attribute is required."                  // rule
 v.Attributes["dob"] = "date of birth"                               // :attribute for a field key
+v.Attributes["items.*.sku"] = "item SKU"                            // * matches any index
 ```
+
+`Messages` and `Attributes` keys may use `*` for indexes, as in
+`items.*.quantity` or `emails.*.email`.
+
+## Locales
+
+Messages are English by default. A Turkish catalogue (`tr`) is built in, and
+`AddLocale` adds or extends others:
+
+```go
+validation.AddLocale("tr", map[string]string{
+    "email.unique": "Bu e-posta zaten kayıtlı.",
+}, map[string]string{
+    "email": "e-posta", // :attribute in Turkish messages
+})
+validation.AddLocale("de", map[string]string{
+    "required": "Das Feld :attribute ist erforderlich.",
+}, nil)
+```
+
+Choose the locale per request. `validation.LocaleMiddleware` reads
+`Accept-Language` and picks the best registered locale; requests asking for
+English or an unknown language keep English. `validation.WithLocale(ctx, "tr")`
+sets one explicitly:
+
+```go
+app.Use(validation.LocaleMiddleware)
+```
+
+A locale's messages are searched first, by the same keys as `Messages`; then
+`Messages`, the rule's registered message and the English defaults. Regional
+names fall back to their language: `pt-BR` uses `pt` when only that exists.
+Without the middleware or `WithLocale`, responses stay in English.
+
+## Form requests
+
+`c.Validate` treats the struct as a form request. After binding, it calls the
+struct's `Authorize` and `Prepare` methods if it has them, then validates the
+tags and `AfterValidate`:
+
+```go
+type UpdatePost struct {
+    Title string `json:"title" validate:"required,max=120"`
+    Start string `json:"start" validate:"required,date"`
+    End   string `json:"end" validate:"required,date"`
+}
+
+// Authorize runs first; return httpcontext.ErrForbidden for 403.
+func (r *UpdatePost) Authorize(c *golar.Context) error {
+    if !canEdit(c.Context(), c.Param("id")) {
+        return httpcontext.ErrForbidden
+    }
+    return nil
+}
+
+// Prepare normalizes input before the rules run.
+func (r *UpdatePost) Prepare(c *golar.Context) error {
+    r.Title = strings.TrimSpace(r.Title)
+    return nil
+}
+
+// AfterValidate checks rules that span fields. It runs only when every tag
+// rule passes; its errors are reported like tag errors.
+func (r *UpdatePost) AfterValidate(ctx context.Context) (validation.Errors, error) {
+    if r.End <= r.Start {
+        return validation.Errors{"end": {"The end must be after the start."}}, nil
+    }
+    return nil, nil
+}
+```
+
+The order is bind, `Authorize`, `Prepare`, tag rules, `AfterValidate`.
+`AfterValidate` also runs for `validation.Validate(&v)`; pass a pointer when the
+method has a pointer receiver. Any error other than `ErrForbidden` from a hook
+is returned unchanged.
+
+`golar make:request StorePost` writes `app/requests/store_post_request.go` with
+a `StorePostRequest` struct and empty `Authorize` and `Prepare` methods.
 
 ## Custom rules
 

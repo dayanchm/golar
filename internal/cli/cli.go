@@ -55,6 +55,8 @@ func (c *CLI) Run(ctx context.Context, args []string) error {
 		return nil
 	case "make:migration":
 		return c.makeMigration(args[1:])
+	case "make:request":
+		return c.makeRequest(args[1:])
 	case "migrate", "migrate:rollback", "migrate:reset", "migrate:refresh", "migrate:status":
 		return c.migrationCommand(ctx, args[0], args[1:])
 	case "new":
@@ -75,6 +77,7 @@ func (c *CLI) help() {
   golar routes [--dir project]
   golar doctor [--dir project]
   golar make:migration <name> [--dir project]
+  golar make:request <name> [--dir project]
   golar migrate [--pretend] [--dir project]
   golar migrate:rollback | migrate:reset | migrate:refresh | migrate:status
   golar version`)

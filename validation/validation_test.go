@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/dayanchm/golar/database"
 )
@@ -307,5 +308,198 @@ func TestFormTagKeys(t *testing.T) {
 	}
 	if len(invalid.Errors["full_name"]) == 0 || len(invalid.Errors["email"]) == 0 || len(invalid.Errors) != 2 {
 		t.Errorf("errors = %v, want full_name and email", invalid.Errors)
+	}
+}
+
+func TestTypeAndFormatRules(t *testing.T) {
+	type input struct {
+		Name     any       `json:"name" validate:"string"`
+		Count    any       `json:"count" validate:"integer"`
+		Active   any       `json:"active" validate:"boolean"`
+		First    string    `json:"first" validate:"alpha"`
+		Handle   string    `json:"handle" validate:"alpha_num"`
+		Slug     string    `json:"slug" validate:"alpha_dash"`
+		Site     string    `json:"site" validate:"starts_with=http:// https://"`
+		File     string    `json:"file" validate:"ends_with=.png .jpg"`
+		Born     string    `json:"born" validate:"date"`
+		Due      string    `json:"due" validate:"date=02.01.2006"`
+		Starts   time.Time `json:"starts" validate:"date"`
+		Optional string    `json:"optional" validate:"alpha"`
+	}
+	valid := input{
+		Name: "Ayşe", Count: float64(3), Active: "1", First: "Ayşe", Handle: "user42", Slug: "my-post_1",
+		Site: "https://example.com", File: "a.png", Born: "1990-01-02", Due: "31.12.2026",
+		Starts: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+	}
+	if err := Validate(valid); err != nil {
+		t.Fatalf("valid input: %v", err)
+	}
+	for _, variant := range []any{int64(7), uint8(1), "12", "-4"} {
+		valid.Count = variant
+		if err := Validate(valid); err != nil {
+			t.Errorf("integer %#v: %v", variant, err)
+		}
+	}
+	for _, variant := range []any{true, false, 0, 1, "true", "0"} {
+		valid.Active = variant
+		if err := Validate(valid); err != nil {
+			t.Errorf("boolean %#v: %v", variant, err)
+		}
+	}
+	valid.Born = "2026-10-29T10:00:00Z"
+	if err := Validate(valid); err != nil {
+		t.Errorf("RFC 3339 date: %v", err)
+	}
+
+	invalid := input{
+		Name: 42, Count: 1.5, Active: "yes", First: "Ayşe1", Handle: "user 42", Slug: "my post",
+		Site: "ftp://example.com", File: "a.gif", Born: "02/01/1990", Due: "2026-12-31",
+		Starts: time.Time{}, Optional: "",
+	}
+	var verr *Error
+	if err := Validate(invalid); !errors.As(err, &verr) {
+		t.Fatalf("invalid input error = %v", err)
+	}
+	want := []string{"active", "born", "count", "due", "file", "first", "handle", "name", "site", "slug"}
+	got := slices.Sorted(maps.Keys(verr.Errors))
+	if !slices.Equal(got, want) {
+		t.Errorf("failing keys = %v, want %v", got, want)
+	}
+	if msg := verr.Errors["site"][0]; msg != "The site field must start with one of the following: http://, https://." {
+		t.Errorf("starts_with message = %q", msg)
+	}
+	for _, value := range []any{"12.5", "x", true, nil} {
+		invalid := struct {
+			V any `json:"v" validate:"required,integer"`
+		}{value}
+		if err := Validate(invalid); err == nil {
+			t.Errorf("integer accepted %#v", value)
+		}
+	}
+	for _, tag := range []string{"starts_with", "string=x", "alpha_dash=1"} {
+		if _, err := New().parseTag(tag); err == nil {
+			t.Errorf("tag %q accepted", tag)
+		}
+	}
+}
+
+func TestCollections(t *testing.T) {
+	type item struct {
+		SKU      string `json:"sku" validate:"required,alpha_dash"`
+		Quantity int    `json:"quantity" validate:"required,min=1"`
+	}
+	type order struct {
+		Items    []item            `json:"items" validate:"required,max=3"`
+		Pointers []*item           `json:"pointers"`
+		Fixed    [2]item           `json:"fixed"`
+		ByCode   map[string]item   `json:"by_code"`
+		Emails   []string          `json:"emails" validate:"max=3,each,required,email"`
+		Scores   []any             `json:"scores" validate:"each,integer,between=1 5"`
+		Labels   map[string]string `json:"labels" validate:"each,max=5"`
+	}
+	in := order{
+		Items:    []item{{SKU: "a-1", Quantity: 1}, {SKU: "b 2", Quantity: 0}},
+		Pointers: []*item{nil, {SKU: "", Quantity: 2}},
+		Fixed:    [2]item{{SKU: "x", Quantity: 1}, {SKU: "y"}},
+		ByCode:   map[string]item{"tr": {SKU: "t", Quantity: 1}, "en": {Quantity: 1}},
+		Emails:   []string{"ada@example.com", "", "nope"},
+		Scores:   []any{float64(3), 1.5, "9"},
+		Labels:   map[string]string{"en": "Hello", "tr": "Merhaba"},
+	}
+	var verr *Error
+	if err := Validate(in); !errors.As(err, &verr) {
+		t.Fatalf("error = %v", err)
+	}
+	want := map[string]string{
+		"items.1.sku":      "The sku field must only contain letters, numbers, dashes and underscores.",
+		"items.1.quantity": "The quantity field is required.",
+		"pointers.1.sku":   "The sku field is required.",
+		"fixed.1.quantity": "The quantity field is required.",
+		"by_code.en.sku":   "The sku field is required.",
+		"emails.1":         "The emails.1 field is required.",
+		"emails.2":         "The emails.2 field must be a valid email address.",
+		"scores.1":         "The scores.1 field must be an integer.",
+		"scores.2":         "The scores.2 field must be between 1 and 5.",
+		"labels.tr":        "The labels.tr field must not be greater than 5 characters.",
+	}
+	if len(verr.Errors) != len(want) {
+		t.Errorf("errors = %v", verr.Errors)
+	}
+	for key, message := range want {
+		if got := verr.Errors[key]; len(got) != 1 || got[0] != message {
+			t.Errorf("%s = %q, want %q", key, got, message)
+		}
+	}
+
+	// A collection that fails its own rules is not checked element by element.
+	tooMany := order{Items: make([]item, 4), Fixed: [2]item{{SKU: "a", Quantity: 1}, {SKU: "b", Quantity: 1}}}
+	if err := Validate(tooMany); !errors.As(err, &verr) || len(verr.Errors) != 1 || len(verr.Errors["items"]) != 1 {
+		t.Errorf("max items error = %v", err)
+	}
+
+	v := New()
+	v.Attributes["items.*.quantity"] = "item quantity"
+	v.Messages["emails.*.email"] = "Use a real address for :attribute."
+	err := v.Validate(order{Items: []item{{SKU: "a"}}, Emails: []string{"x"}})
+	if !errors.As(err, &verr) || verr.Errors["items.0.quantity"][0] != "The item quantity field is required." ||
+		verr.Errors["emails.0"][0] != "Use a real address for emails.0." {
+		t.Errorf("wildcard overrides = %v", err)
+	}
+
+	for _, bad := range []any{
+		struct {
+			V string `validate:"each,email"`
+		}{},
+		struct {
+			V []string `validate:"each,nope"`
+		}{},
+	} {
+		if err := New().Validate(bad); err == nil || errors.As(err, &verr) {
+			t.Errorf("%T: error = %v, want a tag error", bad, err)
+		}
+	}
+	regexEach := struct {
+		V string `json:"v" validate:"regex=^each$"`
+	}{"each"}
+	if err := Validate(regexEach); err != nil {
+		t.Errorf("each inside a regex: %v", err)
+	}
+}
+
+type booking struct {
+	Start string `json:"start" validate:"required,date"`
+	End   string `json:"end" validate:"required,date"`
+	fail  error
+}
+
+func (b *booking) AfterValidate(context.Context) (Errors, error) {
+	if b.fail != nil {
+		return nil, b.fail
+	}
+	if b.End <= b.Start {
+		return Errors{"end": {"The end must be after the start."}}, nil
+	}
+	return nil, nil
+}
+
+func TestAfterValidate(t *testing.T) {
+	var verr *Error
+	if err := Validate(&booking{Start: "2026-01-02", End: "2026-01-01"}); !errors.As(err, &verr) || verr.Errors["end"][0] != "The end must be after the start." {
+		t.Errorf("cross-field error = %v", err)
+	}
+	if err := Validate(&booking{Start: "2026-01-01", End: "2026-01-02"}); err != nil {
+		t.Errorf("valid booking: %v", err)
+	}
+	// Tag errors skip the hook, so it never sees invalid input.
+	if err := Validate(&booking{End: "2026-01-01", fail: errors.New("must not run")}); !errors.As(err, &verr) || len(verr.Errors) != 1 {
+		t.Errorf("hook ran after tag errors: %v", err)
+	}
+	failure := errors.New("database down")
+	if err := Validate(&booking{Start: "2026-01-01", End: "2026-01-02", fail: failure}); !errors.Is(err, failure) {
+		t.Errorf("hook error = %v", err)
+	}
+	// A struct value is not addressable, so its pointer method cannot run.
+	if err := Validate(booking{Start: "2026-01-02", End: "2026-01-01"}); err != nil {
+		t.Errorf("value without the method: %v", err)
 	}
 }

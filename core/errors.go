@@ -27,7 +27,8 @@ func (e *HTTPError) Unwrap() error { return e.Err }
 
 // DefaultErrorHandler logs errors and hides unexpected implementation details.
 // Validation errors become 422 JSON, oversized bodies 413, unsupported body
-// types 415, and undecodable bodies and invalid input parameters 400.
+// types 415, denied form requests 403, and undecodable bodies and invalid
+// input parameters 400.
 // If the response has started, it logs the error without appending a second body.
 func DefaultErrorHandler(c *httpcontext.Context, err error) {
 	var invalid *validation.Error
@@ -44,6 +45,10 @@ func DefaultErrorHandler(c *httpcontext.Context, err error) {
 	var tooLarge *http.MaxBytesError
 	if errors.As(err, &tooLarge) {
 		http.Error(c.Writer, http.StatusText(http.StatusRequestEntityTooLarge), http.StatusRequestEntityTooLarge)
+		return
+	}
+	if errors.Is(err, httpcontext.ErrForbidden) {
+		http.Error(c.Writer, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 		return
 	}
 	if errors.Is(err, httpcontext.ErrUnsupportedMediaType) {
