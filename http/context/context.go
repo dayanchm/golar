@@ -5,6 +5,7 @@ package context
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/netip"
@@ -100,13 +101,41 @@ type BindError struct{ Err error }
 func (e *BindError) Error() string { return "invalid request body: " + e.Err.Error() }
 func (e *BindError) Unwrap() error { return e.Err }
 
-// Validate binds the body into dst with Bind and checks its `validate` tags
-// with validation.Default. It returns *BindError for bodies that cannot be
-// decoded and *validation.Error, which the default error handler renders as
-// 422, for invalid input.
+// ErrForbidden is returned by Validate when a request's Authorize method
+// denies it. The default error handler responds with 403 Forbidden.
+var ErrForbidden = errors.New("forbidden")
+
+// Authorizer is implemented by request structs that decide whether the
+// current user may make the request. Return ErrForbidden to deny it.
+type Authorizer interface {
+	Authorize(c *Context) error
+}
+
+// Preparer is implemented by request structs that normalize input, such as
+// trimming or lower-casing, after binding and before validation.
+type Preparer interface {
+	Prepare(c *Context) error
+}
+
+// Validate is a form request: it binds the body into dst with Bind, calls
+// dst's Authorize and Prepare methods when it has them, and checks its
+// `validate` tags and AfterValidate method with validation.Default. It
+// returns *BindError for bodies that cannot be decoded, ErrForbidden (403)
+// when Authorize denies the request and *validation.Error, which the default
+// error handler renders as 422, for invalid input.
 func (c *Context) Validate(dst any) error {
 	if err := c.Bind(dst); err != nil {
 		return err
+	}
+	if authorizer, ok := dst.(Authorizer); ok {
+		if err := authorizer.Authorize(c); err != nil {
+			return err
+		}
+	}
+	if preparer, ok := dst.(Preparer); ok {
+		if err := preparer.Prepare(c); err != nil {
+			return err
+		}
 	}
 	return validation.ValidateContext(c.Request.Context(), dst)
 }

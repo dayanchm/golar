@@ -267,3 +267,48 @@ func TestFileWithoutMultipart(t *testing.T) {
 		t.Error("Form read a JSON body")
 	}
 }
+
+type postRequest struct {
+	Title string `json:"title" validate:"required,max=10"`
+	Owner string `json:"owner"`
+	calls *[]string
+}
+
+func (p *postRequest) Authorize(c *Context) error {
+	*p.calls = append(*p.calls, "authorize")
+	if c.Request.Header.Get("X-User") != p.Owner {
+		return ErrForbidden
+	}
+	return nil
+}
+
+func (p *postRequest) Prepare(*Context) error {
+	*p.calls = append(*p.calls, "prepare")
+	p.Title = strings.TrimSpace(p.Title)
+	return nil
+}
+
+func TestFormRequest(t *testing.T) {
+	run := func(body, user string) ([]string, *postRequest, error) {
+		var calls []string
+		r := newRequest(http.MethodPost, "application/json", body)
+		r.Header.Set("X-User", user)
+		in := &postRequest{calls: &calls}
+		err := New(httptest.NewRecorder(), r).Validate(in)
+		return calls, in, err
+	}
+	calls, in, err := run(`{"title":"  Hello   ","owner":"ada"}`, "ada")
+	if err != nil || in.Title != "Hello" || strings.Join(calls, ",") != "authorize,prepare" {
+		t.Fatalf("Validate = %v, title %q, calls %v", err, in.Title, calls)
+	}
+	if calls, _, err := run(`{"title":"Hello","owner":"ada"}`, "eve"); !errors.Is(err, ErrForbidden) || len(calls) != 1 {
+		t.Errorf("forbidden = %v, calls %v", err, calls)
+	}
+	var verr *validation.Error
+	if _, _, err := run(`{"title":"   ","owner":"ada"}`, "ada"); !errors.As(err, &verr) || len(verr.Errors["title"]) != 1 {
+		t.Errorf("prepared blank title = %v", err)
+	}
+	if calls, _, err := run(`{"title":`, "ada"); len(calls) != 0 || err == nil {
+		t.Errorf("bad body ran hooks: %v %v", calls, err)
+	}
+}

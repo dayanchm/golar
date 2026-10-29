@@ -95,6 +95,13 @@ type Validator struct {
 	locales map[string]*locale
 }
 
+// AfterValidator is implemented by structs with checks that span fields, such
+// as "end must follow start". AfterValidate runs only when every tag rule
+// passes; the errors it returns are reported like tag errors.
+type AfterValidator interface {
+	AfterValidate(ctx context.Context) (Errors, error)
+}
+
 // pass is the state of one validation run.
 type pass struct {
 	errs   Errors
@@ -158,6 +165,17 @@ func (v *Validator) ValidateContext(ctx context.Context, value any) error {
 	p := &pass{errs: Errors{}, locale: l}
 	if err := v.check(ctx, rv, "", p, 0); err != nil {
 		return err
+	}
+	if len(p.errs) == 0 {
+		if after, ok := afterValidator(value, rv); ok {
+			extra, err := after.AfterValidate(ctx)
+			if err != nil {
+				return err
+			}
+			for key, messages := range extra {
+				p.errs[key] = append(p.errs[key], messages...)
+			}
+		}
 	}
 	if len(p.errs) > 0 {
 		return &Error{Errors: p.errs}
@@ -365,6 +383,18 @@ func (v *Validator) message(f Field, bound boundRule, l *locale) string {
 		":min", low,
 		":max", high,
 	).Replace(text)
+}
+
+// afterValidator finds AfterValidate on value or, for addressable structs, its pointer.
+func afterValidator(value any, rv reflect.Value) (AfterValidator, bool) {
+	if after, ok := value.(AfterValidator); ok {
+		return after, true
+	}
+	if rv.CanAddr() {
+		after, ok := rv.Addr().Interface().(AfterValidator)
+		return after, ok
+	}
+	return nil, false
 }
 
 // indirect follows pointers and interfaces, reporting false for nil.

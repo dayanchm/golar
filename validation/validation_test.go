@@ -465,3 +465,41 @@ func TestCollections(t *testing.T) {
 		t.Errorf("each inside a regex: %v", err)
 	}
 }
+
+type booking struct {
+	Start string `json:"start" validate:"required,date"`
+	End   string `json:"end" validate:"required,date"`
+	fail  error
+}
+
+func (b *booking) AfterValidate(context.Context) (Errors, error) {
+	if b.fail != nil {
+		return nil, b.fail
+	}
+	if b.End <= b.Start {
+		return Errors{"end": {"The end must be after the start."}}, nil
+	}
+	return nil, nil
+}
+
+func TestAfterValidate(t *testing.T) {
+	var verr *Error
+	if err := Validate(&booking{Start: "2026-01-02", End: "2026-01-01"}); !errors.As(err, &verr) || verr.Errors["end"][0] != "The end must be after the start." {
+		t.Errorf("cross-field error = %v", err)
+	}
+	if err := Validate(&booking{Start: "2026-01-01", End: "2026-01-02"}); err != nil {
+		t.Errorf("valid booking: %v", err)
+	}
+	// Tag errors skip the hook, so it never sees invalid input.
+	if err := Validate(&booking{End: "2026-01-01", fail: errors.New("must not run")}); !errors.As(err, &verr) || len(verr.Errors) != 1 {
+		t.Errorf("hook ran after tag errors: %v", err)
+	}
+	failure := errors.New("database down")
+	if err := Validate(&booking{Start: "2026-01-01", End: "2026-01-02", fail: failure}); !errors.Is(err, failure) {
+		t.Errorf("hook error = %v", err)
+	}
+	// A struct value is not addressable, so its pointer method cannot run.
+	if err := Validate(booking{Start: "2026-01-02", End: "2026-01-01"}); err != nil {
+		t.Errorf("value without the method: %v", err)
+	}
+}
