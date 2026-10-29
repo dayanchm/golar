@@ -1,0 +1,71 @@
+{{define "home"}}{{template "head" .}}
+<body class="home">
+{{template "header" .}}
+<main>
+  <section class="hero">
+    <div class="hero-text">
+      <p class="eyebrow">Full-stack framework for Go</p>
+      <h1>Laravel's developer experience, built on the Go standard library.</h1>
+      <p class="lead">Golar generates API, Web and Full Stack projects and gives them routing, validation, an ORM, authentication, sessions and mail, while <code>net/http</code> handlers, <code>database/sql</code> and standard middleware keep working as usual.</p>
+      <div class="actions">
+        <a class="button primary" href="{{$.URL "docs/index.html"}}">Read the guide</a>
+        <a class="button" href="{{.Repo}}">View on GitHub</a>
+      </div>
+    </div>
+    <div class="hero-code">
+      <div class="window"><div class="window-bar"><span></span><span></span><span></span><em>terminal</em></div>{{index .Snippets "install"}}</div>
+    </div>
+  </section>
+
+  <section class="features" aria-labelledby="features-title">
+    <h2 id="features-title">What's included</h2>
+    <div class="grid">
+      <a class="card" href="{{$.URL "docs/index.html#cli"}}">
+        <h3>CLI and scaffolding</h3>
+        <p><code>golar new</code> creates API, Web or Full Stack projects with React, Vue or Svelte, a database, authentication and Docker.</p>
+      </a>
+      <a class="card" href="{{$.URL "docs/index.html#router"}}">
+        <h3>Routing</h3>
+        <p>Groups, route priority, error-returning handlers and a graceful server with sensible timeouts.</p>
+      </a>
+      <a class="card" href="{{$.URL "docs/http/context.html"}}">
+        <h3>Request context</h3>
+        <p>JSON, forms and uploads with body limits, secure cookies, templates, redirects and downloads.</p>
+      </a>
+      <a class="card" href="{{$.URL "docs/http/middleware.html"}}">
+        <h3>Middleware</h3>
+        <p>Request IDs, logging, recovery, CORS, security headers, body limits, timeouts and gzip.</p>
+      </a>
+      <a class="card" href="{{$.URL "docs/validation.html"}}">
+        <h3>Validation</h3>
+        <p>Struct-tag rules, custom messages and database rules, answered as JSON <code>422</code>.</p>
+      </a>
+      <a class="card" href="{{$.URL "docs/database/orm.html"}}">
+        <h3>Database and ORM</h3>
+        <p>SQLite, PostgreSQL and MySQL with migrations, a query builder and a generics-based ORM.</p>
+      </a>
+      <a class="card" href="{{$.URL "docs/auth/index.html"}}">
+        <h3>Authentication</h3>
+        <p>Argon2id, session and token guards, CSRF, rate limiting, gates, policies and roles.</p>
+      </a>
+      <a class="card" href="{{$.URL "docs/mail.html"}}">
+        <h3>Mail</h3>
+        <p>SMTP with STARTTLS, a log driver, a test fake and ready-made reset and verification emails.</p>
+      </a>
+    </div>
+  </section>
+
+  <section class="example">
+    <div class="example-text">
+      <h2>Handlers that read like the problem</h2>
+      <p>Handlers return errors. The default error handler turns validation failures into <code>422</code> JSON, oversized bodies into <code>413</code> and everything unexpected into a logged <code>500</code>, so the happy path stays short.</p>
+      <ul class="checks">
+        <li>Plain <code>func(http.Handler) http.Handler</code> middleware</li>
+        <li>Session IDs and tokens stored as SHA-256 hashes</li>
+        <li>Tested against real SQLite, PostgreSQL and MySQL</li>
+      </ul>
+    </div>
+    <div class="window">{{index .Snippets "code"}}</div>
+  </section>
+</main>
+{{template "footer" .}}{{end}}
