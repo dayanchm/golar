@@ -6,6 +6,8 @@
 [![Database CI](https://github.com/dayanchm/golar/actions/workflows/database.yml/badge.svg)](https://github.com/dayanchm/golar/actions/workflows/database.yml)
 [![Scaffold CI](https://github.com/dayanchm/golar/actions/workflows/scaffold.yml/badge.svg)](https://github.com/dayanchm/golar/actions/workflows/scaffold.yml)
 
+**Website and documentation: [dayanchm.github.io/golar](https://dayanchm.github.io/golar/)**
+
 Golar gives Go applications the batteries Laravel developers expect, built on
 the standard library: `net/http` handlers, `database/sql` connections and
 `func(http.Handler) http.Handler` middleware all work as usual.

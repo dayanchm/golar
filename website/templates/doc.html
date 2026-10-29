@@ -1,0 +1,37 @@
+{{define "doc"}}{{template "head" .}}
+<body class="docs">
+{{template "header" .}}
+<div class="docs-layout">
+  <details class="sidebar" open>
+    <summary>Contents</summary>
+    <nav aria-label="Documentation">
+      {{range .Sections}}
+      <p class="sidebar-title">{{.Title}}</p>
+      <ul>
+        {{range .Pages}}<li><a href="{{$.URL .Out}}"{{if eq .Out $.Page.Out}} aria-current="page"{{end}}>{{.Title}}</a></li>{{end}}
+      </ul>
+      {{end}}
+    </nav>
+  </details>
+  <script>if (matchMedia("(max-width: 800px)").matches) document.querySelector(".sidebar").open = false</script>
+  <main class="content">
+    <article class="prose">{{.Page.Body}}</article>
+    <p class="edit"><a href="{{.Repo}}/edit/main/{{.Page.Source}}">Edit this page on GitHub</a></p>
+  </main>
+  {{if .Page.Headings}}
+  <aside class="toc" aria-label="On this page">
+    <p class="sidebar-title">On this page</p>
+    <ul>{{range .Page.Headings}}<li><a href="#{{.ID}}">{{.Text}}</a></li>{{end}}</ul>
+  </aside>
+  {{end}}
+</div>
+{{template "footer" .}}{{end}}
+
+{{define "notfound"}}{{template "head" .}}
+<body>
+{{template "header" .}}
+<main class="notfound">
+  <h1>Page not found</h1>
+  <p>The page you are looking for does not exist. Start from the <a href="{{$.URL "docs/index.html"}}">guide</a> or the <a href="{{$.URL "index.html"}}">home page</a>.</p>
+</main>
+{{template "footer" .}}{{end}}

@@ -1,0 +1,48 @@
+{{define "head"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{if .Page}}{{.Page.Title}} · Golar{{else}}Golar — full-stack framework for Go{{end}}</title>
+<meta name="description" content="A modern, modular full-stack framework for Go, inspired by Laravel's developer experience.">
+<link rel="icon" href="{{$.URL "assets/icon.svg"}}" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="{{$.URL "assets/style.css"}}">
+<link rel="stylesheet" href="{{$.URL "assets/highlight.css"}}">
+</head>
+{{end}}
+
+{{define "header"}}
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="{{$.URL "index.html"}}">
+      <img src="{{$.URL "assets/icon.svg"}}" alt="" width="26" height="26">
+      <span>Golar</span>
+    </a>
+    {{if .Version}}<a class="version" href="{{$.URL "docs/changelog.html"}}">{{.Version}}</a>{{end}}
+    <nav class="topnav" aria-label="Main">
+      <a href="{{$.URL "docs/index.html"}}">Docs</a>
+      <a href="{{$.URL "docs/changelog.html"}}">Changelog</a>
+      <a href="{{.Repo}}">GitHub</a>
+    </nav>
+  </div>
+</header>
+{{end}}
+
+{{define "footer"}}
+<footer class="footer">
+  <div class="footer-inner">
+    <span>Golar {{.Version}}</span>
+    <span class="footer-links">
+      <a href="{{$.URL "docs/index.html"}}">Docs</a>
+      <a href="{{.Repo}}">GitHub</a>
+      <a href="{{.Repo}}/issues">Issues</a>
+      <a href="{{.Repo}}/releases">Releases</a>
+    </span>
+  </div>
+</footer>
+</body>
+</html>
+{{end}}
