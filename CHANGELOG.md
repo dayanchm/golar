@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Validation rules:** `string`, `integer`, `boolean`, `alpha`, `alpha_num`,
+  `alpha_dash`, `starts_with`, `ends_with` and `date`.
+- **Collections:** structs in slices, arrays and maps are validated under keys
+  such as `items.0.sku`; rules after `each` apply to every element; `Messages`
+  and `Attributes` accept `*` for indexes.
+- **Locales:** `AddLocale`, `WithLocale`, `MatchLocale` and `LocaleMiddleware`,
+  with a built-in Turkish catalogue. English stays the default.
+- **Form requests:** `c.Validate` calls `Authorize` (deny with
+  `httpcontext.ErrForbidden`, rendered as 403) and `Prepare`;
+  `validation.AfterValidator` adds cross-field checks.
+- **CLI:** `golar make:request <name>`.
+- **API resources** (`http/resource`): `Object`, `Item`, `Collection`,
+  `Paginated` with `meta` and `links`, `PageURL`, and the conditional helpers
+  `When`, `WhenFunc`, `WhenNotNil` and `MergeWhen`.
+
+### Changed
+
+- Structs inside slices, arrays and maps are now validated. Requests whose
+  element structs carry `validate` tags can fail validation where v0.5.1
+  accepted them.
+- `integer`, like `numeric`, makes size rules compare string values as numbers.
+
 ## v0.5.1 — 2026-10-28
 
 ### Fixed

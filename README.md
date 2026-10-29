@@ -198,9 +198,29 @@ type RegisterRequest struct {
 }
 ```
 
-Rules include `required`, `email`, `url`, `uuid`, `numeric`, `min`, `max`, `len`,
-`between`, `in`, `regex`, `confirmed`, `unique` and `exists`. Messages can be
-overridden and custom rules registered. See the [validation guide](docs/validation.md).
+Rules include `required`, `email`, `url`, `uuid`, `numeric`, `string`,
+`integer`, `boolean`, `alpha`, `alpha_num`, `alpha_dash`, `starts_with`,
+`ends_with`, `date`, `min`, `max`, `len`, `between`, `in`, `regex`,
+`confirmed`, `unique` and `exists`. Slices, arrays and maps are validated
+element by element (`items.0.sku`, `each` rules), messages can be localized
+(Turkish is built in), and request structs can add `Authorize`, `Prepare` and
+`AfterValidate` hooks; `golar make:request` generates one. See the
+[validation guide](docs/validation.md).
+
+## API resources
+
+```go
+func UserResource(ctx context.Context, u models.User) resource.Object {
+    return resource.Object{"id": u.ID, "name": u.Name, "email": resource.When(isAdmin(ctx), u.Email)}
+}
+
+users, page, err := orm.Query[models.User](db).Paginate(ctx, pageNumber, 15)
+return c.JSON(http.StatusOK, resource.Paginated(ctx, users, page, UserResource, resource.PageURL(c.Request, "page")))
+```
+
+Resources name every field they send, so private fields stay private.
+`Item`, `Collection` and `Paginated` wrap them in `{"data": ...}` with
+pagination `meta` and `links`. See the [resources guide](docs/http/resources.md).
 
 ## Request context
 
