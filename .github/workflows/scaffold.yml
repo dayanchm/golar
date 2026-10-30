@@ -23,6 +23,10 @@ jobs:
             frontend: none
             database: postgres
             auth: session
+          - template: web
+            frontend: vue
+            database: none
+            auth: none
           - template: fullstack
             frontend: react
             database: none
@@ -87,4 +91,18 @@ jobs:
         run: |
           cd "$RUNNER_TEMP/demo/frontend"
           npm install --no-audit --no-fund
-          npm run build
+          cd ..
+          "$RUNNER_TEMP/golar" build
+      # The built server must link the hashed bundle and serve it.
+      - name: Serve built frontend
+        if: matrix.frontend != 'none'
+        run: |
+          cd "$RUNNER_TEMP/demo"
+          test -f frontend/dist/.vite/manifest.json
+          APP_ADDR=127.0.0.1:18080 ./bin/server &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:18080/health >/dev/null && break; sleep 1; done
+          page=$(curl -sf http://127.0.0.1:18080/)
+          asset=$(printf '%s' "$page" | grep -o '/assets/[^"]*\.js' | head -n 1)
+          test -n "$asset" || { echo "no bundle in: $page"; exit 1; }
+          curl -sfI "http://127.0.0.1:18080$asset" | grep -qi 'cache-control: public, max-age=31536000, immutable'
+          kill %1
