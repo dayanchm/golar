@@ -57,6 +57,10 @@ func (c *CLI) Run(ctx context.Context, args []string) error {
 		return c.makeMigration(args[1:])
 	case "make:request":
 		return c.makeRequest(args[1:])
+	case "make:frontend":
+		return c.makeFrontend(args[1:])
+	case "build":
+		return c.buildProject(ctx, args[1:])
 	case "migrate", "migrate:rollback", "migrate:reset", "migrate:refresh", "migrate:status":
 		return c.migrationCommand(ctx, args[0], args[1:])
 	case "new":
@@ -73,11 +77,13 @@ func (c *CLI) help() {
                    [--frontend none|react|vue|svelte] [--auth none|token|session] [--docker]
                    [--module path] [--interactive | --no-interactive] [--dir parent]
                    [--framework-dir path | --framework-version version]
-  golar serve [--dir project] [--addr :8080]
+  golar serve [--dir project] [--addr :8080] [--no-vite] [--vite-port 5173]
   golar routes [--dir project]
   golar doctor [--dir project]
   golar make:migration <name> [--dir project]
   golar make:request <name> [--dir project]
+  golar make:frontend react|vue|svelte [--dir project]
+  golar build [--dir project] [--output bin/server] [--no-frontend]
   golar migrate [--pretend] [--dir project]
   golar migrate:rollback | migrate:reset | migrate:refresh | migrate:status
   golar version`)
@@ -259,8 +265,12 @@ func (c *CLI) projectCommand(ctx context.Context, name string, args []string) er
 	flags.SetOutput(c.Err)
 	root := flags.String("dir", c.Dir, "project directory")
 	var addr *string
+	var noVite *bool
+	var vitePort *int
 	if name == "serve" {
 		addr = flags.String("addr", "", "listen address override")
+		noVite = flags.Bool("no-vite", false, "do not start the Vite dev server")
+		vitePort = flags.Int("vite-port", 5173, "Vite dev server port")
 	}
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -311,6 +321,9 @@ func (c *CLI) projectCommand(ctx context.Context, name string, args []string) er
 	}
 	if *addr != "" {
 		address = *addr
+	}
+	if config.Frontend != "none" && !*noVite {
+		return c.serveWithVite(ctx, *root, env, binary, address, *vitePort)
 	}
 	fmt.Fprintf(c.Out, "Serving %s on %s (Ctrl+C to stop)\n", config.Name, address)
 	return c.run(ctx, *root, env, c.Out, binary, "--addr", address)
