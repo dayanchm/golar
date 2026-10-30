@@ -57,7 +57,7 @@ func sections() []Section {
 	p := func(source, title string) *Page { return &Page{Source: source, Title: title, Out: outPath(source)} }
 	return []Section{
 		{"Getting started", []*Page{p("README.md", "Guide"), p("CHANGELOG.md", "Changelog")}},
-		{"HTTP", []*Page{p("docs/http/context.md", "Request context"), p("docs/http/middleware.md", "Middleware"), p("docs/validation.md", "Validation"), p("docs/http/resources.md", "API resources")}},
+		{"HTTP", []*Page{p("docs/http/context.md", "Request context"), p("docs/http/middleware.md", "Middleware"), p("docs/validation.md", "Validation"), p("docs/http/resources.md", "API resources"), p("docs/frontend.md", "Frontend")}},
 		{"Database", []*Page{
 			p("docs/database/configuration.md", "Configuration"), p("docs/database/connections.md", "Connections"),
 			p("docs/database/migrations.md", "Migrations"), p("docs/database/schema-builder.md", "Schema builder"),

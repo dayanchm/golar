@@ -16,7 +16,8 @@ the standard library: `net/http` handlers, `database/sql` connections and
 
 - **CLI and scaffolding:** `golar new` generates API, Web or Full Stack projects
   with an optional React, Vue or Svelte frontend, database, authentication and
-  Docker setup.
+  Docker setup. `golar serve` runs Vite alongside Go, and `http/vite` emits
+  hashed asset tags from Vite's manifest.
 - **HTTP:** a router with groups and route priority, error-returning handlers
   with a request context for JSON, forms, uploads, cookies and downloads, a
   graceful server, and middleware for logging, recovery, request IDs, CORS,
@@ -106,8 +107,11 @@ func main() {
 golar new my-app --interactive   # prompts for every option
 golar routes                     # lists the application's registered routes
 golar doctor                     # checks files, dependencies, tools and configuration
-golar serve --addr :8080         # builds and runs the app with graceful shutdown
+golar serve --addr :8080         # builds and runs the app; also runs Vite for frontends
+golar build                      # npm run build, then go build into bin/server
 golar make:migration create_posts_table
+golar make:request StorePost     # app/requests/store_post_request.go
+golar make:frontend react        # adds a Vite frontend to a project without one
 golar migrate                    # also migrate:status, :rollback, :reset, :refresh, --pretend
 ```
 
@@ -124,7 +128,9 @@ golar migrate                    # also migrate:status, :rollback, :reset, :refr
 `golar new` prompts on a terminal; `--no-interactive` (or `--yes`) uses defaults
 and flags for scripts. It validates every file before writing and refuses
 existing destinations, including empty directories and symlinks. It does not
-download dependencies or initialize Git. `golar serve` has no hot reload yet.
+download dependencies or initialize Git. For projects with a frontend,
+`golar serve` runs the Vite dev server alongside Go for hot reloading; Go code
+changes still need a restart.
 
 ### Generated projects
 
@@ -133,9 +139,11 @@ handlers, models, routes, bootstrap and config code, migration and storage
 folders, and runnable tests. The default middleware stack adds request IDs,
 logging, panic recovery, security headers, a 10 MiB body limit and gzip.
 
-- **Frontends** use [Vite](https://vite.dev/guide/). `npm run dev` in
-  `frontend` proxies `/api` and `/health` to Go; `npm run build` produces assets
-  that Go serves in production. Node 24 is recommended.
+- **Frontends** use [Vite](https://vite.dev/guide/). Full Stack projects are
+  single-page apps that Go serves from `frontend/dist`; Web projects render
+  pages in Go and load the bundle with `{{vite "src/main.js"}}`. `golar serve`
+  runs Vite with Go, and `golar build` builds both. Node 24 is recommended. See
+  the [frontend guide](docs/frontend.md).
 - **Databases:** SQLite creates its file; PostgreSQL and MySQL need a running
   server. Configure `DATABASE_DSN` in `.env` and run `golar migrate`.
 - **Authentication:** `--auth token` and `--auth session` generate a `User`
