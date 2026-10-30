@@ -1,3 +1,6 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{{.Name}}</title></head>
-<body><main><h1>{{.Name}}</h1><p>Your Golar application is running.</p>{{if ne .Frontend "none"}}<p>Run npm install and npm run dev in frontend, or npm run build to serve the production frontend here.</p>{{end}}</main></body></html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{{.Name}}</title>
+{{- if and (eq .Template "web") (ne .Frontend "none")}}
+{{if eq .Frontend "react"}}{{"{{"}}vite_react_refresh{{"}}"}}{{end}}{{"{{"}}vite "{{if eq .Frontend "react"}}src/main.jsx{{else}}src/main.js{{end}}"{{"}}"}}
+{{- end}}</head>
+<body>{{if and (eq .Template "web") (ne .Frontend "none")}}<div id="app"></div>{{else}}<main><h1>{{.Name}}</h1><p>Your Golar application is running.</p>{{if ne .Frontend "none"}}<p>Run golar serve to develop with Vite, or golar build to serve the production frontend here.</p>{{end}}</main>{{end}}</body></html>

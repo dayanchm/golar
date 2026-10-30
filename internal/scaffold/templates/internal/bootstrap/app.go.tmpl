@@ -9,12 +9,9 @@ import (
  "{{.Module}}/routes"
 {{if ne .Auth "none"}} "{{.Module}}/internal/auth"
  "github.com/dayanchm/golar/mail"{{end}}
-{{if ne .Frontend "none"}} "io/fs"
- "net/http"
- "os"
- "path/filepath"
- "strings"{{end}}
-)
+{{if eq .Template "fullstack"}} "github.com/dayanchm/golar/http/vite"
+{{else if ne .Frontend "none"}} "{{.Module}}/web"
+{{end}})
 
 {{if ne .Database "none"}}// New builds the application; the database opens when it starts.
 func New() (*golar.Application,error) {return build(nil{{if ne .Auth "none"}},nil{{end}})}
@@ -41,7 +38,12 @@ func build(db *database.DB{{if ne .Auth "none"}},mailer mail.Mailer{{end}}) (*go
   middleware.BodyLimit(10<<20), // 10 MiB
   middleware.Compress(),
  )
-{{if ne .Frontend "none"}} app.Use(frontend()){{end}}
+{{if eq .Template "fullstack"}} // Serves frontend/dist with an index.html fallback for client-side routes.
+ // In development, open the Vite dev server instead; it proxies /api here.
+ app.Use(vite.New(vite.Config{}).SPA(vite.PathPrefix("/api","/health")))
+{{else if ne .Frontend "none"}} // Serves the built frontend; web/templates/index.html includes it with {{"{{"}}vite ...{{"}}"}}.
+ app.Use(web.Assets.Files)
+{{end}}
 {{if ne .Auth "none"}} a,err:=auth.New(mailer)
  if err!=nil{return nil,err}
 {{if eq .Auth "session"}} app.Use(a.Middleware()...)
@@ -61,21 +63,3 @@ func build(db *database.DB{{if ne .Auth "none"}},mailer mail.Mailer{{end}}) (*go
  app.OnShutdown(func(context.Context) error {if db!=nil{return db.Close()};return nil})
 {{end}} return app,nil
 }
-{{if ne .Frontend "none"}}
-// Production serves Vite's build; development uses Vite's /api proxy.
-func frontend() golar.Middleware {
- return func(next http.Handler) http.Handler {
-  return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
-   if r.Method!="GET"&&r.Method!="HEAD"||r.URL.Path=="/api"||strings.HasPrefix(r.URL.Path,"/api/")||r.URL.Path=="/health" {next.ServeHTTP(w,r);return}
-   root:=os.DirFS("frontend/dist")
-   if _,err:=fs.Stat(root,"index.html");err!=nil{next.ServeHTTP(w,r);return}
-   path:=strings.TrimPrefix(r.URL.Path,"/")
-   if path==""{http.ServeFile(w,r,"frontend/dist/index.html");return}
-   if !fs.ValidPath(path){http.NotFound(w,r);return}
-   if info,err:=fs.Stat(root,path);err==nil&&!info.IsDir(){http.FileServer(http.FS(root)).ServeHTTP(w,r);return}
-   if filepath.Ext(path)!=""{http.NotFound(w,r);return}
-   http.ServeFile(w,r,"frontend/dist/index.html")
-  })
- }
-}
-{{end}}
