@@ -3,10 +3,22 @@ package web
 import (
  "embed"
  "html/template"
+{{if ne .Frontend "none"}}
+ "github.com/dayanchm/golar/http/vite"{{end}}
 )
 
 //go:embed templates/*.html
 var files embed.FS
+{{if ne .Frontend "none"}}
+// Assets resolves frontend entry points: the Vite dev server while
+// VITE_DEV_SERVER_URL is set (golar serve sets it), else frontend/dist.
+var Assets=vite.New(vite.Config{})
 
+// Templates holds the HTML templates; render them with c.Render. They can
+// use {{"{{"}}vite "src/main.js"{{"}}"}}, {{"{{"}}vite_asset "src/logo.svg"{{"}}"}} and
+// {{"{{"}}vite_react_refresh{{"}}"}}.
+var Templates=template.Must(template.New("").Funcs(Assets.FuncMap()).ParseFS(files,"templates/*.html"))
+{{else}}
 // Templates holds the HTML templates; render them with c.Render.
 var Templates=template.Must(template.ParseFS(files,"templates/*.html"))
+{{end}}

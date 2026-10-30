@@ -2,6 +2,8 @@ package scaffold
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 )
 
 func renderFrontend(files map[string][]byte, d data) error {
@@ -15,7 +17,7 @@ func renderFrontend(files map[string][]byte, d data) error {
 		development["@vitejs/plugin-react"] = "6.1.2"
 		config = `import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-export default defineConfig({ plugins: [react()], server: { proxy: { '/api': process.env.GOLAR_BACKEND_URL || 'http://localhost:8080', '/health': process.env.GOLAR_BACKEND_URL || 'http://localhost:8080' } } });
+export default defineConfig({ plugins: [react()], build: { manifest: true__INPUT__ }, server: { origin: process.env.VITE_DEV_SERVER_URL, proxy: { '/api': process.env.GOLAR_BACKEND_URL || 'http://localhost:8080', '/health': process.env.GOLAR_BACKEND_URL || 'http://localhost:8080' } } });
 `
 		main = `import React from 'react';
 import { createRoot } from 'react-dom/client';
@@ -43,7 +45,7 @@ export default function App() {
 		development["@vitejs/plugin-vue"] = "6.0.9"
 		config = `import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
-export default defineConfig({ plugins: [vue()], server: { proxy: { '/api': process.env.GOLAR_BACKEND_URL || 'http://localhost:8080', '/health': process.env.GOLAR_BACKEND_URL || 'http://localhost:8080' } } });
+export default defineConfig({ plugins: [vue()], build: { manifest: true__INPUT__ }, server: { origin: process.env.VITE_DEV_SERVER_URL, proxy: { '/api': process.env.GOLAR_BACKEND_URL || 'http://localhost:8080', '/health': process.env.GOLAR_BACKEND_URL || 'http://localhost:8080' } } });
 `
 		main = `import { createApp } from 'vue';
 import App from './App.vue';
@@ -70,7 +72,7 @@ async function greet() {
 		development["@sveltejs/vite-plugin-svelte"] = "7.3.1"
 		config = `import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
-export default defineConfig({ plugins: [svelte()], server: { proxy: { '/api': process.env.GOLAR_BACKEND_URL || 'http://localhost:8080', '/health': process.env.GOLAR_BACKEND_URL || 'http://localhost:8080' } } });
+export default defineConfig({ plugins: [svelte()], build: { manifest: true__INPUT__ }, server: { origin: process.env.VITE_DEV_SERVER_URL, proxy: { '/api': process.env.GOLAR_BACKEND_URL || 'http://localhost:8080', '/health': process.env.GOLAR_BACKEND_URL || 'http://localhost:8080' } } });
 `
 		main = `import { mount } from 'svelte';
 import App from './App.svelte';
@@ -92,6 +94,18 @@ async function greet() {
 		files["frontend/src/App.svelte"] = []byte(component)
 		files["frontend/src/main.js"] = []byte(main)
 	}
+	// Web pages are rendered by Go, so the bundle's entry is the script itself
+	// and its manifest key matches {{vite "src/main.js"}}; single-page apps
+	// build index.html.
+	input := ""
+	if d.Template == "web" {
+		entry := "src/main.js"
+		if d.Frontend == "react" {
+			entry = "src/main.jsx"
+		}
+		input = ", rollupOptions: { input: '" + entry + "' }"
+	}
+	config = strings.Replace(config, "__INPUT__", input, 1)
 	pkg := map[string]any{"name": d.Name + "-frontend", "private": true, "version": "0.0.0", "type": "module", "engines": map[string]string{"node": "^20.19.0 || ^22.12.0 || >=24"}, "scripts": map[string]string{"dev": "vite", "build": "vite build", "preview": "vite preview"}, "dependencies": dependencies, "devDependencies": development}
 	body, err := json.MarshalIndent(pkg, "", "  ")
 	if err != nil {
@@ -106,4 +120,21 @@ async function greet() {
 	files["frontend/index.html"] = []byte(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>` + d.Name + `</title></head><body><div id="app"></div><script type="module" src="` + entry + `"></script></body></html>`)
 	files["frontend/src/style.css"] = []byte(`body{font-family:system-ui,sans-serif;background:#f4f5f7;color:#17202a;margin:0}main{max-width:640px;margin:10vh auto;padding:2rem;background:white;border-radius:12px}button,input{font:inherit;padding:.65rem;margin:.5rem 0}label{display:block}input{display:block}button{cursor:pointer}`)
 	return nil
+}
+
+// FrontendFiles renders the frontend/ files of a project with the given
+// options, for adding a frontend to an existing project.
+func FrontendFiles(o Options) (map[string][]byte, error) {
+	o, err := Normalize(o)
+	if err != nil {
+		return nil, err
+	}
+	if o.Frontend == "none" {
+		return nil, fmt.Errorf("choose a frontend: react, vue or svelte")
+	}
+	files := map[string][]byte{}
+	if err := renderFrontend(files, data{Options: o}); err != nil {
+		return nil, err
+	}
+	return files, nil
 }

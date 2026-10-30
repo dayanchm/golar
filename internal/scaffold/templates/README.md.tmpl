@@ -90,14 +90,19 @@ Golar authentication guide for gates, roles, password resets and email verificat
 {{.Frontend}} uses Vite. Requires Node 20.19+ or 22.12+ (Node 24 recommended).
 
 ```sh
-cd frontend
-npm install
-npm run dev
+cd frontend && npm install && cd ..
+golar serve      # Go on :8080 and Vite on :5173, with hot reloading
+golar build      # npm run build, then go build into bin/server
 ```
 
-Vite proxies /api and /health to http://localhost:8080. Set GOLAR_BACKEND_URL in
-the frontend process to change the proxy target.
-`npm run build` creates frontend/dist; the Go backend serves it in production.
+{{if eq .Template "fullstack"}}Open http://localhost:5173 while developing; Vite proxies /api and /health to Go.
+In production, Go serves frontend/dist and answers client-side routes with its
+index.html.{{else}}Open http://localhost:8080 while developing. web/templates/index.html loads the
+bundle with `{{"{{"}}vite "{{if eq .Frontend "react"}}src/main.jsx{{else}}src/main.js{{end}}"{{"}}"}}`, which points at Vite during `golar serve`
+and at the hashed files in frontend/dist after a build.{{end}}
+Run the binary from the project directory, or deploy frontend/dist next to it.
+`golar serve --no-vite` starts only Go; `npm run dev` in frontend still works
+on its own, with GOLAR_BACKEND_URL changing its proxy target.
 Frontend HTML and assets are served by middleware and do not appear in the route list.
 {{end}}
 

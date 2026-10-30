@@ -14,10 +14,20 @@
 - **Form requests:** `c.Validate` calls `Authorize` (deny with
   `httpcontext.ErrForbidden`, rendered as 403) and `Prepare`;
   `validation.AfterValidator` adds cross-field checks.
-- **CLI:** `golar make:request <name>`.
 - **API resources** (`http/resource`): `Object`, `Item`, `Collection`,
   `Paginated` with `meta` and `links`, `PageURL`, and the conditional helpers
   `When`, `WhenFunc`, `WhenNotNil` and `MergeWhen`.
+- **Vite integration** (`http/vite`): `Tags`, `URL` and `ReactRefresh` resolve
+  entries through Vite's manifest in production and the dev server in
+  development; `FuncMap` exposes them to templates as `vite`, `vite_asset` and
+  `vite_react_refresh`. `Files` serves the build with immutable caching for
+  hashed assets, and `SPA` adds the `index.html` fallback. Builds can be
+  embedded with `Config.FS`.
+- **CLI:** `golar make:request <name>`. `golar serve` runs `npm run dev` alongside the server for projects
+  with a frontend (`--no-vite`, `--vite-port`); `golar build` builds the
+  frontend and the server; `golar make:frontend react|vue|svelte` adds a
+  frontend to an existing project.
+- **Docs:** a full-stack guide (`docs/frontend.md`).
 
 ### Changed
 
@@ -25,6 +35,10 @@
   element structs carry `validate` tags can fail validation where v0.5.1
   accepted them.
 - `integer`, like `numeric`, makes size rules compare string values as numbers.
+- Generated Vite configs enable `build.manifest` and `server.origin`.
+- Generated Full Stack projects serve `frontend/dist` with `vite.SPA`. Web
+  projects with a frontend now render their pages in Go and load the bundle
+  with `{{vite ...}}` instead of replacing them with `frontend/dist/index.html`.
 
 ## v0.5.1 — 2026-10-28
 

@@ -14,18 +14,18 @@ pre-existing failures.
 | Item | Status | Notes |
 | --- | --- | --- |
 | Validation foundation | existing | `validation` package, `Validator`, cached plans, `*validation.Error` → 422 |
-| Built-in rules | done (`feat/v0.6`) | v0.5.1 had required, email, url, uuid, regex, numeric, min, max, len, between, in, confirmed, unique and exists; added string, integer, boolean, alpha, alpha_num, alpha_dash, starts_with, ends_with and date |
+| Built-in rules | done (#57) | v0.5.1 had required, email, url, uuid, regex, numeric, min, max, len, between, in, confirmed, unique and exists; added string, integer, boolean, alpha, alpha_num, alpha_dash, starts_with, ends_with and date |
 | Custom rules | existing | `Register`, `Validator.Register` |
-| Nested JSON validation | done (`feat/v0.6`) | nested structs existed; added slices, arrays and maps of structs (`items.0.name`) and `each` element rules |
+| Nested JSON validation | done (#57) | nested structs existed; added slices, arrays and maps of structs (`items.0.name`) and `each` element rules |
 | Database unique and exists | existing | values are bound; table and column names pass the query builder's identifier check |
-| Localized messages | done (`feat/v0.6`) | v0.5.1 had per-validator overrides only; added locales, a Turkish catalogue and Accept-Language middleware |
-| Form request validation | done (`feat/v0.6`) | `c.Validate` existed; added Authorize, Prepare and AfterValidate hooks |
-| `make:request` command | done (`feat/v0.6`) | |
-| Validation tests and docs | done (`feat/v0.6`) | unit tests for every new rule, collections, locales and hooks; `docs/validation.md` |
-| API resource foundation | done (`feat/v0.6`) | `http/resource` |
-| Resource collections | done (`feat/v0.6`) | |
-| Pagination metadata | done (`feat/v0.6`) | built on `query.Pagination`, which existed |
-| Conditional resource fields | done (`feat/v0.6`) | |
+| Localized messages | done (#57) | v0.5.1 had per-validator overrides only; added locales, a Turkish catalogue and Accept-Language middleware |
+| Form request validation | done (#57) | `c.Validate` existed; added Authorize, Prepare and AfterValidate hooks |
+| `make:request` command | done (#57) | |
+| Validation tests and docs | done (#57) | unit tests for every new rule, collections, locales and hooks; `docs/validation.md` |
+| API resource foundation | done (#57) | `http/resource` |
+| Resource collections | done (#57) | |
+| Pagination metadata | done (#57) | built on `query.Pagination`, which existed |
+| Conditional resource fields | done (#57) | |
 
 Known limitations:
 
@@ -41,13 +41,23 @@ Known limitations:
 | Item | Status | Notes |
 | --- | --- | --- |
 | Frontend integration foundation | existing | `golar new --template web` or `fullstack` |
-| Vite integration | existing | Vite config with `/api` proxy in generated projects |
-| React, Vue and Svelte templates | existing | `--frontend` react, vue or svelte |
-| Frontend asset management | partial | production serves `frontend/dist`; no manifest-based asset URL helper for server-rendered pages |
-| Development server integration | partial | Vite proxies to the Go server; `golar serve` does not start Vite |
-| Production asset builds | partial | `npm run build` output is served; no CLI command or embed option |
-| Frontend scaffolding commands | missing | no command to add a frontend to an existing project |
-| Frontend integration tests and docs | partial | scaffold CI builds every frontend; no full-stack guide in docs/ |
+| Vite integration | done (`feat/v0.7`) | v0.5.1 had the Vite config and `/api` proxy; added `http/vite` with manifest-based tags, dev-server tags and the React refresh preamble |
+| React, Vue and Svelte templates | existing | `--frontend` react, vue or svelte; configs now enable `build.manifest` |
+| Frontend asset management | done (`feat/v0.7`) | `vite.Files` with immutable caching for hashed assets, `vite.SPA`, `Config.FS` for embedded builds; Web pages load the bundle with `{{vite ...}}` |
+| Development server integration | done (`feat/v0.7`) | `golar serve` runs Vite with Go and stops both together |
+| Production asset builds | done (`feat/v0.7`) | `golar build` |
+| Frontend scaffolding commands | done (`feat/v0.7`) | `golar make:frontend` react, vue or svelte |
+| Frontend integration tests | done (`feat/v0.7`) | unit tests with a manifest fixture and fake process runner; scaffold CI already builds each frontend with npm |
+| Full-stack docs | done (`feat/v0.7`) | `docs/frontend.md` |
+
+Known limitations:
+
+- `golar make:frontend` cannot edit `internal/bootstrap/app.go`; it prints
+  the lines to add.
+- `golar serve` reloads the frontend, not Go code.
+- npm is the only package manager the CLI runs.
+- Generated binaries read `frontend/dist` from disk; embedding is documented
+  but not generated.
 
 ## Phase 3 — v0.8.0: Storage and cache
 
@@ -72,7 +82,5 @@ All items **missing**.
 
 ## Next steps
 
-1. Review and merge `feat/v0.6` (Phase 1).
-2. Phase 2: asset manifest helper, `golar serve` running Vite, production
-   build command, `make:frontend` (or equivalent), full-stack guide.
-3. Phase 3 onwards in the plan's order.
+1. Review and merge `feat/v0.7` (Phase 2). Phase 1 was merged in #57.
+2. Phase 3 (storage and cache) onwards in the plan's order.
