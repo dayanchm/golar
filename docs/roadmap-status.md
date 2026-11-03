@@ -66,12 +66,12 @@ Known limitations:
 | Filesystem abstraction | done (`feat/v0.8-storage`) | `storage.Disk` |
 | Local storage driver | done (`feat/v0.8-storage`) | `storage.Local` through `os.Root` |
 | AWS S3 driver | done (`feat/v0.8-storage`) | `storage.S3`; SigV4 checked against the S3 API reference examples |
-| S3-compatible storage | done (`feat/v0.8-storage`) | path-style addressing, custom endpoints; CI runs the disk tests against MinIO |
+| S3-compatible storage | done (`feat/v0.8-storage`) | path-style addressing, custom endpoints; CI runs the disk tests against Versity Gateway |
 | File upload validation | done (`feat/v0.8-storage`) | `file`, `image`, `mimetypes`, `extensions`, `max_size`, `min_size`; `PutUpload` |
 | Public and private file access | done (`feat/v0.8-storage`) | per-disk visibility |
 | Temporary signed URLs | done (`feat/v0.8-storage`) | HMAC for local disks, presigned URLs for S3 |
 | File streaming | done (`feat/v0.8-storage`) | streamed `Put` and `Get`, `Stream`, `Local.Handler` with Range |
-| Storage integration tests | done (`feat/v0.8-storage`) | conformance suite for every disk, fake S3, MinIO in `storage.yml`, an upload flow through a Golar app |
+| Storage integration tests | done (`feat/v0.8-storage`) | conformance suite for every disk, fake S3, Versity Gateway in `storage.yml`, an upload flow through a Golar app |
 | Cache (all items) | missing | next |
 
 Known limitations:

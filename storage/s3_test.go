@@ -287,7 +287,7 @@ func TestSizedSpoolsUnknownReaders(t *testing.T) {
 }
 
 // TestS3Integration runs the disk tests against a real S3-compatible service
-// when GOLAR_TEST_S3_ENDPOINT is set, such as MinIO in CI:
+// when GOLAR_TEST_S3_ENDPOINT is set, such as Versity Gateway in CI or MinIO:
 //
 //	GOLAR_TEST_S3_ENDPOINT=http://localhost:9000 GOLAR_TEST_S3_BUCKET=golar-test
 //	GOLAR_TEST_S3_KEY=minioadmin GOLAR_TEST_S3_SECRET=minioadmin

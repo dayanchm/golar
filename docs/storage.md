@@ -151,8 +151,9 @@ directly instead of through your server.
 
 `storage.NewLocal` with `t.TempDir()` gives tests a real disk with no setup.
 The S3 driver's tests run against an in-memory S3 that checks every request's
-signature, and `storage.yml` in CI runs them against MinIO. To run them
-locally against MinIO:
+signature, and `storage.yml` in CI runs them against a real S3-compatible
+server, Versity Gateway. To run them locally against any S3-compatible
+service, such as MinIO or Versity Gateway:
 
 ```sh
 GOLAR_TEST_S3_ENDPOINT=http://localhost:9000 GOLAR_TEST_S3_BUCKET=golar-test \
