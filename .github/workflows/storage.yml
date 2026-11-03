@@ -1,0 +1,29 @@
+name: Storage CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  minio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      # Credentials are test-only defaults for a throwaway container. The
+      # integration test creates the bucket.
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=golar-test -e MINIO_ROOT_PASSWORD=golar-test-secret \
+            minio/minio:latest server /data
+          for i in $(seq 1 30); do curl -sf http://localhost:9000/minio/health/ready && break; sleep 1; done
+      - run: go test -race -run 'TestS3Integration|TestS3|TestLocal' -v ./storage/...
+        env:
+          GOLAR_TEST_S3_ENDPOINT: http://localhost:9000
+          GOLAR_TEST_S3_BUCKET: golar-test
+          GOLAR_TEST_S3_KEY: golar-test
+          GOLAR_TEST_S3_SECRET: golar-test-secret
