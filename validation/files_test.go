@@ -50,7 +50,7 @@ func TestFileRules(t *testing.T) {
 
 	invalid := form{
 		Avatar:   upload(t, "evil.png", svgBytes),                       // named .png, really SVG
-		Document: upload(t, "cv.pdf", []byte("%PDF-1 tiny")),              // too small
+		Document: upload(t, "cv.pdf", []byte("%PDF-1 tiny")),            // too small
 		Photos:   []*multipart.FileHeader{upload(t, "p.png", pdfBytes)}, // PDF in a photo list
 		Any:      upload(t, "x.pdf", pdfBytes),
 	}
