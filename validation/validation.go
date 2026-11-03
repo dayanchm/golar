@@ -120,6 +120,9 @@ func New() *Validator {
 	for name, rule := range builtinRules(v) {
 		v.rules[name] = registeredRule{rule: rule}
 	}
+	for name, rule := range fileRules() {
+		v.rules[name] = registeredRule{rule: rule}
+	}
 	return v
 }
 

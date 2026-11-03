@@ -182,4 +182,10 @@ var turkish = map[string]string{
 	"starts_with":     ":attribute alanı şunlardan biriyle başlamalıdır: :values.",
 	"ends_with":       ":attribute alanı şunlardan biriyle bitmelidir: :values.",
 	"date":            ":attribute alanı geçerli bir tarih olmalıdır.",
+	"file":            ":attribute alanı bir dosya olmalıdır.",
+	"image":           ":attribute alanı bir resim olmalıdır.",
+	"mimetypes":       ":attribute alanı şu türlerden bir dosya olmalıdır: :values.",
+	"extensions":      ":attribute alanı şu uzantılardan birine sahip olmalıdır: :values.",
+	"max_size":        ":attribute alanı :param boyutundan büyük olamaz.",
+	"min_size":        ":attribute alanı en az :param olmalıdır.",
 }
