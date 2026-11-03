@@ -65,6 +65,7 @@ func sections() []Section {
 			p("docs/database/transactions.md", "Transactions"),
 		}},
 		{"Security and mail", []*Page{p("docs/auth/README.md", "Authentication"), p("docs/mail.md", "Mail")}},
+		{"Storage", []*Page{p("docs/storage.md", "File storage")}},
 	}
 }
 
