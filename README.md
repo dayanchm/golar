@@ -443,3 +443,7 @@ Planned work is tracked in [GitHub milestones](https://github.com/dayanchm/golar
 With the mailer, the planned v0.5.0 features are in place. AI-native tooling,
 such as a `golar mcp` command that exposes routes, schema and models to coding
 agents, is planned but not yet available.
+
+## License
+
+Golar is released under the [MIT License](LICENSE).
