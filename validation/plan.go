@@ -174,6 +174,13 @@ func checkParam(name, param string) error {
 		return numbers(1)
 	case "between":
 		return numbers(2)
+	case "max_size", "min_size":
+		_, err := parseSize(param)
+		return err
+	case "mimetypes", "extensions":
+		if len(strings.Fields(param)) == 0 {
+			return fmt.Errorf("needs space-separated values")
+		}
 	case "in", "starts_with", "ends_with":
 		if len(strings.Fields(param)) == 0 {
 			return fmt.Errorf("needs space-separated values")
@@ -185,7 +192,7 @@ func checkParam(name, param string) error {
 		if param == "" {
 			return fmt.Errorf("needs a table, as in %s=users.email", name)
 		}
-	case "required", "email", "numeric", "url", "uuid", "string", "integer", "boolean", "alpha", "alpha_num", "alpha_dash":
+	case "required", "email", "numeric", "url", "uuid", "string", "integer", "boolean", "alpha", "alpha_num", "alpha_dash", "file", "image":
 		if param != "" {
 			return fmt.Errorf("takes no parameter")
 		}

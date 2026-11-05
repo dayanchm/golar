@@ -49,6 +49,12 @@ var defaultMessages = map[string]string{
 	"starts_with":     "The :attribute field must start with one of the following: :values.",
 	"ends_with":       "The :attribute field must end with one of the following: :values.",
 	"date":            "The :attribute field must be a valid date.",
+	"file":            "The :attribute field must be a file.",
+	"image":           "The :attribute field must be an image.",
+	"mimetypes":       "The :attribute field must be a file of type: :values.",
+	"extensions":      "The :attribute field must have one of the following extensions: :values.",
+	"max_size":        "The :attribute field must not be larger than :param.",
+	"min_size":        "The :attribute field must be at least :param.",
 }
 
 var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)

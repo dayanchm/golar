@@ -29,6 +29,16 @@
   frontend to an existing project.
 - **Docs:** a full-stack guide (`docs/frontend.md`).
 
+- **Storage** (`storage`): the `Disk` interface; `Local`, which stays inside
+  its directory through `os.Root`, writes atomically and serves files with
+  `Handler` (Range, nosniff, sandbox CSP, HMAC-signed URLs for private disks);
+  `S3` for Amazon S3 and compatible services with a built-in SigV4 signer,
+  streamed uploads and downloads, prefixes, pagination and presigned URLs;
+  `PutUpload` and `Stream`.
+- **Upload validation:** `file`, `image`, `mimetypes`, `extensions`,
+  `max_size` and `min_size`, with types sniffed from the content
+  (`validation.SniffContentType`).
+
 ### Changed
 
 - Structs inside slices, arrays and maps are now validated. Requests whose

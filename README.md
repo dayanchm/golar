@@ -30,6 +30,8 @@ the standard library: `net/http` handlers, `database/sql` connections and
   rate limiting, gates, policies, roles, password resets and email verification.
 - **Mail:** SMTP with STARTTLS, a log driver for development, a fake with test
   assertions, templates and ready-made reset and verification emails.
+- **Storage:** local and S3-compatible disks with streaming, public and private
+  files, signed temporary URLs and sniffed upload validation.
 
 See the [roadmap](#roadmap) for what is coming next.
 
@@ -402,6 +404,24 @@ fake.AssertSent(t, "ada@example.com")
 Generated projects with authentication send password reset and verification
 emails from `.env` settings alone; they log mail until `MAIL_DRIVER=smtp` is
 set. See the [mail guide](docs/mail.md).
+
+## Storage
+
+```go
+disk, err := storage.NewS3(storage.S3Config{Bucket: "my-app", Region: "eu-central-1", AccessKeyID: id, SecretAccessKey: secret})
+// or storage.NewLocal(storage.LocalConfig{Root: "storage/app", URL: "/files", Key: key})
+
+type AvatarRequest struct {
+    Avatar *multipart.FileHeader `form:"avatar" validate:"required,image,max_size=2MB"`
+}
+name, err := storage.PutUpload(ctx, disk, "avatars", in.Avatar) // random name, sniffed extension
+link, err := disk.TemporaryURL(ctx, name, 15*time.Minute)
+```
+
+Local disks stay inside their directory through `os.Root` and serve private
+files only through expiring signed URLs. The S3 driver works with Amazon S3,
+MinIO, R2 and Spaces without extra dependencies. See the
+[storage guide](docs/storage.md).
 
 ## Development
 
