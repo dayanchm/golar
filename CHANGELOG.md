@@ -5,6 +5,8 @@
 ### Added
 
 - **License:** Golar is released under the MIT License.
+- **Validation:** `unique=table.column ignore=Field` leaves the current record
+  out of the check on updates; `ignore=Field:column` picks another column.
 - **Validation rules:** `string`, `integer`, `boolean`, `alpha`, `alpha_num`,
   `alpha_dash`, `starts_with`, `ends_with` and `date`.
 - **Collections:** structs in slices, arrays and maps are validated under keys

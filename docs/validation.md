@@ -58,7 +58,7 @@ for an invalid tag or a failing database query.
 | `in=a b c` | the value is one of the space-separated values |
 | `regex=pattern` | the string matches `pattern`; must be the last rule, so the pattern may contain commas |
 | `confirmed` | the field equals `<json name>_confirmation` or `<Go name>Confirmation`; `confirmed=other` names the field |
-| `unique=table.column` | no row has this value; `unique=table` uses the field name as the column |
+| `unique=table.column` | no row has this value; `unique=table` uses the field name as the column; `ignore=Field` leaves out the current record, see [Database rules](#database-rules) |
 | `exists=table.column` | at least one row has this value |
 
 Size means characters for strings, the value for numbers, and the length for
@@ -114,8 +114,29 @@ database on the validator:
 validation.Default.DB = db // *database.DB or *database.Tx
 ```
 
-`unique` does not ignore the current record. To check uniqueness on update,
-register a custom rule that adds the condition you need.
+On update, `ignore` leaves the current record out of the `unique` check, so
+keeping the same email passes while taking another user's still fails. It names
+another field of the struct; the row with that value in the `id` column is
+ignored. Use `ignore=Field:column` for another column:
+
+```go
+type UpdateUser struct {
+    ID    int64  `json:"-" form:"-"`
+    Email string `json:"email" validate:"required,email,unique=users.email ignore=ID"`
+}
+
+func (r *UpdateUser) Prepare(c *golar.Context) error {
+    id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+    r.ID = id
+    return err
+}
+```
+
+Set the field on the server, as `Prepare` does here. Tag it `json:"-"` and
+`form:"-"` so a client cannot send another record's ID and take its value. A
+nil or zero field means there is no current record, so the same struct also
+works on create. Add a unique index as well: the check and the write are
+separate queries, so two requests can still race.
 
 ## Messages
 

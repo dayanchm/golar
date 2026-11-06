@@ -30,8 +30,6 @@ pre-existing failures.
 Known limitations:
 
 - Locale catalogues are English and Turkish only.
-- `unique` still cannot ignore the current record on updates; a custom rule is
-  needed, as before.
 - `AfterValidate` with a pointer receiver runs only when a pointer is
   validated (`c.Validate(&in)` always passes one).
 - Resource fields set to `resource.Missing` inside slices are encoded as `{}`.

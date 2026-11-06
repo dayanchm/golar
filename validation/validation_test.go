@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/dayanchm/golar/database"
+	"github.com/dayanchm/golar/database/query"
 )
 
 // failures returns the validation errors for value and fails the test on any other error.
@@ -296,6 +297,118 @@ func TestDatabaseRules(t *testing.T) {
 		t.Fatal(errs)
 	}
 }
+
+func TestUniqueIgnore(t *testing.T) {
+	driver := os.Getenv("GOLAR_TEST_DRIVER")
+	if driver == "" {
+		driver = "sqlite"
+	}
+	config := database.Config{Driver: driver, Database: filepath.Join(t.TempDir(), "validation.db")}
+	if driver != "sqlite" {
+		config.Database, config.DSN = "", os.Getenv("GOLAR_TEST_DSN")
+	}
+	db, err := database.Connect(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	ctx := context.Background()
+	for _, statement := range []string{
+		"DROP TABLE IF EXISTS validation_accounts",
+		"CREATE TABLE validation_accounts (id INTEGER NOT NULL, code VARCHAR(20) NOT NULL, email VARCHAR(100) NOT NULL)",
+		"INSERT INTO validation_accounts (id, code, email) VALUES (1, 'a', 'one@example.com'), (2, 'b', 'two@example.com')",
+	} {
+		if _, err := db.ExecContext(ctx, statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(func() { _, _ = db.ExecContext(ctx, "DROP TABLE validation_accounts") })
+	v := New()
+	v.DB = db
+
+	type byID struct {
+		ID    int    `json:"-"`
+		Email string `json:"email" validate:"unique=validation_accounts.email ignore=ID"`
+	}
+	type byPointer struct {
+		ID    *int   `json:"-"`
+		Email string `json:"email" validate:"unique=validation_accounts.email ignore=ID"`
+	}
+	type byColumn struct {
+		Code  string `json:"code"`
+		Email string `json:"email" validate:"unique=validation_accounts.email ignore=code:code"`
+	}
+	type byImplicitColumn struct {
+		ID    int    `json:"-"`
+		Email string `json:"email" validate:"unique=validation_accounts ignore=ID"`
+	}
+	one, zero := 1, 0
+	for name, tt := range map[string]struct {
+		input any
+		ok    bool
+	}{
+		"own value":          {byID{ID: 1, Email: "one@example.com"}, true},
+		"another record's":   {byID{ID: 2, Email: "one@example.com"}, false},
+		"unused value":       {byID{ID: 1, Email: "new@example.com"}, true},
+		"zero ID on create":  {byID{Email: "one@example.com"}, false},
+		"pointer ID":         {byPointer{ID: &one, Email: "one@example.com"}, true},
+		"nil pointer ID":     {byPointer{Email: "one@example.com"}, false},
+		"pointer to zero":    {byPointer{ID: &zero, Email: "one@example.com"}, false},
+		"custom column":      {byColumn{Code: "a", Email: "one@example.com"}, true},
+		"other custom value": {byColumn{Code: "b", Email: "one@example.com"}, false},
+		"table only param":   {byImplicitColumn{ID: 1, Email: "one@example.com"}, true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			errs := failures(t, v, tt.input)
+			if (errs == nil) != tt.ok {
+				t.Fatalf("errors = %v, want ok = %v", errs, tt.ok)
+			}
+		})
+	}
+}
+
+func TestUniqueIgnoreParams(t *testing.T) {
+	v := New()
+	v.DB = fakeDB{}
+	for name, input := range map[string]any{
+		"unknown field": struct {
+			Email string `validate:"unique=users.email ignore=ID"`
+		}{"a"},
+		"empty field": struct {
+			Email string `validate:"unique=users.email ignore="`
+		}{"a"},
+		"not ignore": struct {
+			Email string `validate:"unique=users.email skip=ID"`
+		}{"a"},
+		"extra part": struct {
+			ID    int
+			Email string `validate:"unique=users.email ignore=ID more"`
+		}{1, "a"},
+		"exists": struct {
+			ID    int
+			Email string `validate:"exists=users.email ignore=ID"`
+		}{1, "a"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := v.Validate(input)
+			var invalid *Error
+			if err == nil || errors.As(err, &invalid) {
+				t.Fatalf("error = %v, want a tag error", err)
+			}
+		})
+	}
+	bad := struct {
+		ID    []int
+		Email string `validate:"unique=users.email ignore=ID"`
+	}{[]int{1}, "a"}
+	if err := v.Validate(bad); err == nil || !strings.Contains(err.Error(), "cannot compare") {
+		t.Fatalf("error = %v, want a comparison error", err)
+	}
+}
+
+type fakeDB struct{}
+
+func (fakeDB) Table(name string) *query.Builder { return query.New(nil, "sqlite").Table(name) }
 
 func TestFormTagKeys(t *testing.T) {
 	var input struct {

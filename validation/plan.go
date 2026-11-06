@@ -93,6 +93,18 @@ func (v *Validator) plan(t reflect.Type) (*structPlan, error) {
 			plan.fields = append(plan.fields, field)
 		}
 	}
+	for _, field := range plan.fields {
+		for _, rule := range field.rules {
+			if rule.name != "unique" {
+				continue
+			}
+			if _, ignoreField, _, _ := dbParam(rule.param); ignoreField != "" {
+				if _, ok := plan.names[ignoreField]; !ok {
+					return nil, fmt.Errorf("validation: %s: rule %q: no field %q", t, rule.name, ignoreField)
+				}
+			}
+		}
+	}
 	actual, _ := v.plans.LoadOrStore(t, plan)
 	return actual.(*structPlan), nil
 }
@@ -191,6 +203,13 @@ func checkParam(name, param string) error {
 	case "unique", "exists":
 		if param == "" {
 			return fmt.Errorf("needs a table, as in %s=users.email", name)
+		}
+		_, ignoreField, _, err := dbParam(param)
+		if err != nil {
+			return err
+		}
+		if name == "exists" && ignoreField != "" {
+			return fmt.Errorf("does not support ignore")
 		}
 	case "required", "email", "numeric", "url", "uuid", "string", "integer", "boolean", "alpha", "alpha_num", "alpha_dash", "file", "image":
 		if param != "" {
