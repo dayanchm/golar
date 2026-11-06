@@ -333,18 +333,55 @@ func scalar(v reflect.Value) (string, bool) {
 
 var errNoDB = errors.New("unique and exists need Validator.DB")
 
-// count runs SELECT COUNT(*) FROM table WHERE column = value. The param is
+// dbParam splits a unique or exists param: "table.column" or "table",
+// optionally followed by "ignore=Field" or "ignore=Field:column". The ignored
+// column defaults to id.
+func dbParam(param string) (target, ignoreField, ignoreColumn string, err error) {
+	parts := strings.Fields(param)
+	if len(parts) == 0 || len(parts) > 2 {
+		return "", "", "", fmt.Errorf("needs a table and an optional ignore=Field, as in unique=users.email ignore=ID")
+	}
+	if len(parts) == 1 {
+		return parts[0], "", "", nil
+	}
+	spec, ok := strings.CutPrefix(parts[1], "ignore=")
+	ignoreField, ignoreColumn, _ = strings.Cut(spec, ":")
+	if !ok || ignoreField == "" {
+		return "", "", "", fmt.Errorf("unexpected %q, want ignore=Field or ignore=Field:column", parts[1])
+	}
+	if ignoreColumn == "" {
+		ignoreColumn = "id"
+	}
+	return parts[0], ignoreField, ignoreColumn, nil
+}
+
+// count runs SELECT COUNT(*) FROM table WHERE column = value, leaving out the
+// row named by ignore=Field when that field is set. The table part is
 // "table.column", or "table" to use the field's key as the column.
 func (v *Validator) count(ctx context.Context, f Field) (int64, error) {
 	if v.DB == nil {
 		return 0, errNoDB
 	}
-	table, column, ok := strings.Cut(f.Param, ".")
+	target, ignoreField, ignoreColumn, err := dbParam(f.Param)
+	if err != nil {
+		return 0, err
+	}
+	table, column, ok := strings.Cut(target, ".")
 	if !ok {
 		column = f.Name[strings.LastIndex(f.Name, ".")+1:]
 	}
 	if _, ok := scalar(f.Value); !ok {
 		return 0, fmt.Errorf("cannot compare %s with a column", f.Value.Type())
 	}
-	return v.DB.Table(table).Where(column, "=", f.Value.Interface()).Count(ctx)
+	query := v.DB.Table(table).Where(column, "=", f.Value.Interface())
+	if ignoreField != "" {
+		// A nil or zero value means there is no current record, as on create.
+		if ignored, ok := f.Sibling(ignoreField); ok && !ignored.IsZero() {
+			if _, ok := scalar(ignored); !ok {
+				return 0, fmt.Errorf("cannot compare %s with a column", ignored.Type())
+			}
+			query = query.Where(ignoreColumn, "!=", ignored.Interface())
+		}
+	}
+	return query.Count(ctx)
 }
