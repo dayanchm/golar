@@ -38,6 +38,10 @@
   `S3` for Amazon S3 and compatible services with a built-in SigV4 signer,
   streamed uploads and downloads, prefixes, pagination and presigned URLs;
   `PutUpload` and `Stream`.
+- **Cache** (`cache`): the `Store` interface; `Memory`, `File` and `SQLStore`
+  drivers with expiry, atomic `Add` and `Increment`, `Flush` and pruning; the
+  typed `Get`, `Put` and `Remember` helpers; `Columns`, `CreateTables` and `FromEnv`.
+  Generated projects select a store with `CACHE_DRIVER` and use `internal/cache`.
 - **Upload validation:** `file`, `image`, `mimetypes`, `extensions`,
   `max_size` and `min_size`, with types sniffed from the content
   (`validation.SniffContentType`).

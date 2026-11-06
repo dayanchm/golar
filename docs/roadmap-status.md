@@ -70,7 +70,7 @@ Known limitations:
 | Temporary signed URLs | done (`feat/v0.8-storage`) | HMAC for local disks, presigned URLs for S3 |
 | File streaming | done (`feat/v0.8-storage`) | streamed `Put` and `Get`, `Stream`, `Local.Handler` with Range |
 | Storage integration tests | done (`feat/v0.8-storage`) | conformance suite for every disk, fake S3, Versity Gateway in `storage.yml`, an upload flow through a Golar app |
-| Cache (all items) | missing | next |
+| Cache (all items) | done (#64) | `cache`: memory, file and database stores, a conformance suite on SQLite, PostgreSQL and MySQL, `internal/cache` in generated projects |
 
 Known limitations:
 

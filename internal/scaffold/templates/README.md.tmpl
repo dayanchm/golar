@@ -106,6 +106,22 @@ on its own, with GOLAR_BACKEND_URL changing its proxy target.
 Frontend HTML and assets are served by middleware and do not appear in the route list.
 {{end}}
 
+## Cache
+
+`internal/cache` holds the application's store. `.env` selects it with
+`CACHE_DRIVER`: `memory` (the default) or `file`{{if ne .Database "none"}}, or `database`, which survives
+restarts and is shared between instances once `golar migrate` has created its
+table{{end}}.
+
+```go
+import (
+ golar "github.com/dayanchm/golar/cache"
+ "{{.Module}}/internal/cache"
+)
+
+posts,err:=golar.Remember(ctx,cache.Store,"posts:latest",10*time.Minute,loadPosts)
+```
+
 ## Middleware
 
 internal/bootstrap/app.go adds request IDs, logging, panic recovery, security

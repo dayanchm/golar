@@ -1,10 +1,11 @@
 package bootstrap
 
 import (
-{{if ne .Database "none"}} "context"
- "{{.Module}}/internal/database"{{end}}
+ "context"
+{{if ne .Database "none"}} "{{.Module}}/internal/database"{{end}}
  "github.com/dayanchm/golar"
  "github.com/dayanchm/golar/http/middleware"
+ "{{.Module}}/internal/cache"
  "{{.Module}}/internal/config"
  "{{.Module}}/routes"
 {{if ne .Auth "none"}} "{{.Module}}/internal/auth"
@@ -29,7 +30,8 @@ func NewWithDB(db *database.DB{{if ne .Auth "none"}},mailer ...mail.Mailer{{end}
 func build(db *database.DB{{if ne .Auth "none"}},mailer mail.Mailer{{end}}) (*golar.Application,error) {
 {{else}}func New() (*golar.Application,error) {
 {{end}} if err:=config.LoadEnv(".env");err!=nil{return nil,err}
- app:=golar.New()
+{{if eq .Database "none"}} if err:=cache.Init();err!=nil{return nil,err}
+{{end}} app:=golar.New()
  app.Use(
   middleware.RequestID(),
   middleware.Logger(),
@@ -51,15 +53,19 @@ func build(db *database.DB{{if ne .Auth "none"}},mailer mail.Mailer{{end}}) (*go
 {{else}} routes.Register(app)
 {{end}}{{if ne .Database "none"}} if db!=nil{
 {{if ne .Auth "none"}}  a.Init(db)
-{{end}}  return app,nil
+{{end}}  if err:=cache.Init(db);err!=nil{return nil,err}
+  return app,nil
  }
  app.OnStart(func(ctx context.Context) error {
   var err error
   db,err=database.Open(ctx)
 {{if ne .Auth "none"}}  if err==nil{a.Init(db)}
 {{end}}{{if eq .Auth "session"}}  if err==nil{go a.PruneSessions(ctx)}
-{{end}}  return err
+{{end}}  if err==nil{err=cache.Init(db)}
+  if err==nil{go cache.Prune(ctx)}
+  return err
  })
  app.OnShutdown(func(context.Context) error {if db!=nil{return db.Close()};return nil})
+{{else}} app.OnStart(func(ctx context.Context) error {go cache.Prune(ctx);return nil})
 {{end}} return app,nil
 }

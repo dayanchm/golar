@@ -32,6 +32,8 @@ the standard library: `net/http` handlers, `database/sql` connections and
   assertions, templates and ready-made reset and verification emails.
 - **Storage:** local and S3-compatible disks with streaming, public and private
   files, signed temporary URLs and sniffed upload validation.
+- **Cache:** memory, file and database stores with expiry, `Remember` and atomic
+  counters.
 
 See the [roadmap](#roadmap) for what is coming next.
 
