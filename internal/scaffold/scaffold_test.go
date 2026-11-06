@@ -60,6 +60,15 @@ func TestTemplateMatrix(t *testing.T) {
 							if _, ok := files["internal/database/database.go"]; ok != (db != "none") {
 								t.Error("database choice ignored")
 							}
+							if _, ok := files["database/migrations/20260101_000001_create_cache_table.go"]; ok != (db != "none") {
+								t.Error("cache migration mismatch")
+							}
+							if _, ok := files["internal/cache/cache.go"]; !ok {
+								t.Error("cache package missing")
+							}
+							if !strings.Contains(string(files[".env"]), "CACHE_DRIVER=memory") {
+								t.Error("cache driver missing from .env")
+							}
 							for _, path := range []string{"internal/auth/auth.go", "app/models/user.go", "app/handlers/auth.go", "database/migrations/20260101_000000_create_users_table.go", "tests/auth_test.go"} {
 								if _, ok := files[path]; ok != (auth != "none") {
 									t.Errorf("auth choice ignored for %s", path)

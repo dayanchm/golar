@@ -1,0 +1,15 @@
+package migrations
+
+import (
+ "github.com/dayanchm/golar/cache"
+ "github.com/dayanchm/golar/database/migrations"
+ "github.com/dayanchm/golar/database/schema"
+)
+
+// CreateCacheTable creates the table used by CACHE_DRIVER=database.
+type CreateCacheTable struct{}
+
+func (CreateCacheTable) Up(s *schema.Schema) error {return s.Create(cache.Table,cache.Columns)}
+func (CreateCacheTable) Down(s *schema.Schema) error {return s.DropIfExists(cache.Table)}
+
+func init() {migrations.MustRegister("20260101_000001_create_cache_table",CreateCacheTable{})}

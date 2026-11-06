@@ -187,6 +187,9 @@ func Render(options Options) (map[string][]byte, error) {
 		if strings.HasPrefix(relative, "internal/database/") && o.Database == "none" {
 			return nil
 		}
+		if relative == "database/migrations/20260101_000001_create_cache_table.go.tmpl" && o.Database == "none" {
+			return nil
+		}
 		if o.Auth == "none" && (strings.HasPrefix(relative, "internal/auth/") || authFiles[relative]) {
 			return nil
 		}

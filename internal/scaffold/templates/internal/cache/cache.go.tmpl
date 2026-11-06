@@ -1,0 +1,27 @@
+// Package cache holds the application's cache store.
+package cache
+
+import (
+ "context"
+ "time"
+
+ golar "github.com/dayanchm/golar/cache"
+{{if ne .Database "none"}} "{{.Module}}/internal/database"
+{{end}})
+
+// Store is the application's cache. Use it with the helpers in
+// github.com/dayanchm/golar/cache, such as Remember, Get and Put.
+var Store golar.Store=golar.NewMemory()
+
+// Init selects the store named by CACHE_DRIVER. Call it before serving.
+{{if ne .Database "none"}}func Init(db *database.DB) error {
+ store,err:=golar.FromEnv(db)
+{{else}}func Init() error {
+ store,err:=golar.FromEnv(nil)
+{{end}} if err!=nil{return err}
+ Store=store
+ return nil
+}
+
+// Prune deletes expired values every hour until ctx ends.
+func Prune(ctx context.Context) {golar.PruneEvery(ctx,Store,time.Hour)}
