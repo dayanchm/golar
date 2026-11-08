@@ -124,13 +124,17 @@ func TestExpiry(t *testing.T) {
 		if _, ok, _ := store.Get(ctx, "past"); ok {
 			t.Fatal("expired value loaded")
 		}
-		must(t, store.Put(ctx, "short", []byte("v"), 40*time.Millisecond))
-		must(t, store.Put(ctx, "forever", []byte("v"), 0))
-		must(t, store.Put(ctx, "long", []byte("v"), time.Hour))
+		// Read the short value back straight away, with room for slow
+		// databases under -race, then wait until it has certainly expired.
+		const short = 300 * time.Millisecond
+		must(t, store.Put(ctx, "short", []byte("v"), short))
+		written := time.Now() // the expiry is no later than written + short
 		if _, ok, _ := store.Get(ctx, "short"); !ok {
 			t.Fatal("live value missing")
 		}
-		time.Sleep(60 * time.Millisecond)
+		must(t, store.Put(ctx, "forever", []byte("v"), 0))
+		must(t, store.Put(ctx, "long", []byte("v"), time.Hour))
+		time.Sleep(time.Until(written.Add(short + 20*time.Millisecond)))
 		if _, ok, _ := store.Get(ctx, "short"); ok {
 			t.Fatal("expired value loaded")
 		}
