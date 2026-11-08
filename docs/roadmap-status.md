@@ -3,8 +3,8 @@
 Audit of the implementation plan against the repository at v0.5.1
 (`f14049e`). Status values: **existing** (works and is tested), **partial**
 (some of the item works; the gap is described) and **missing**. Items marked
-**done** were completed after the audit, on the branch noted; they are not on
-`main` until that branch is reviewed and merged.
+**done** were completed after the audit and merged in the pull request or
+issue noted.
 
 Baseline at the audit: `go vet ./...` and `go test ./...` pass with no
 pre-existing failures.
@@ -61,15 +61,15 @@ Known limitations:
 
 | Item | Status | Notes |
 | --- | --- | --- |
-| Filesystem abstraction | done (`feat/v0.8-storage`) | `storage.Disk` |
-| Local storage driver | done (`feat/v0.8-storage`) | `storage.Local` through `os.Root` |
-| AWS S3 driver | done (`feat/v0.8-storage`) | `storage.S3`; SigV4 checked against the S3 API reference examples |
-| S3-compatible storage | done (`feat/v0.8-storage`) | path-style addressing, custom endpoints; CI runs the disk tests against Versity Gateway |
-| File upload validation | done (`feat/v0.8-storage`) | `file`, `image`, `mimetypes`, `extensions`, `max_size`, `min_size`; `PutUpload` |
-| Public and private file access | done (`feat/v0.8-storage`) | per-disk visibility |
-| Temporary signed URLs | done (`feat/v0.8-storage`) | HMAC for local disks, presigned URLs for S3 |
-| File streaming | done (`feat/v0.8-storage`) | streamed `Put` and `Get`, `Stream`, `Local.Handler` with Range |
-| Storage integration tests | done (`feat/v0.8-storage`) | conformance suite for every disk, fake S3, Versity Gateway in `storage.yml`, an upload flow through a Golar app |
+| Filesystem abstraction | done (#59) | `storage.Disk` |
+| Local storage driver | done (#59) | `storage.Local` through `os.Root` |
+| AWS S3 driver | done (#59) | `storage.S3`; SigV4 checked against the S3 API reference examples |
+| S3-compatible storage | done (#59) | path-style addressing, custom endpoints; CI runs the disk tests against Versity Gateway |
+| File upload validation | done (#59) | `file`, `image`, `mimetypes`, `extensions`, `max_size`, `min_size`; `PutUpload` |
+| Public and private file access | done (#59) | per-disk visibility |
+| Temporary signed URLs | done (#59) | HMAC for local disks, presigned URLs for S3 |
+| File streaming | done (#59) | streamed `Put` and `Get`, `Stream`, `Local.Handler` with Range |
+| Storage integration tests | done (#59) | conformance suite for every disk, fake S3, Versity Gateway in `storage.yml`, an upload flow through a Golar app |
 | Cache (all items) | done (#64) | `cache`: memory, file and database stores, a conformance suite on SQLite, PostgreSQL and MySQL, `internal/cache` in generated projects |
 
 Known limitations:
@@ -96,6 +96,13 @@ All items **missing**.
 
 ## Next steps
 
-1. Review and merge `feat/v0.8-storage`. Phases 1 and 2 were merged in #57
-   and #58.
-2. Phase 3 cache, then Phase 4 onwards in the plan's order.
+Phases 1 to 3 are merged: #57, #58, #59 and #64. They are listed under
+Unreleased in `CHANGELOG.md`; the latest release is still v0.5.1.
+
+1. Publish the merged work (#61).
+2. Phase 4: queue (#65), events (#66) and notifications (#67).
+3. Phase 5: `golar mcp` (#68). The rest of the phase is not yet scoped.
+
+The known limitations above are tracked as #69 (S3 multipart uploads), #70
+(reloading Go code in `golar serve`), #71 (`make:frontend` editing bootstrap)
+and #72 (embedding the frontend build).

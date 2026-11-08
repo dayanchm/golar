@@ -441,10 +441,19 @@ auth mode ([scaffold.yml](.github/workflows/scaffold.yml)).
 
 ## Roadmap
 
-Planned work is tracked in [GitHub milestones](https://github.com/dayanchm/golar/milestones).
-With the mailer, the planned v0.5.0 features are in place. AI-native tooling,
-such as a `golar mcp` command that exposes routes, schema and models to coding
-agents, is planned but not yet available.
+Planned work is tracked in [GitHub milestones](https://github.com/dayanchm/golar/milestones);
+[docs/roadmap-status.md](docs/roadmap-status.md) lists every item and its state.
+
+| Milestone | Scope | State |
+| --- | --- | --- |
+| v0.6.0 | Validation rules, locales, form requests and API resources | merged, unreleased |
+| v0.7.0 | Vite integration, `golar serve` with Vite, `golar build` | merged, unreleased |
+| v0.8.0 | File storage (local and S3) and cache | merged, unreleased |
+| v0.9.0 | Queue, events and notifications | planned |
+| v0.10.0 | AI integration, starting with `golar mcp` for coding agents | planned |
+
+Merged but unreleased work is listed under Unreleased in the
+[changelog](CHANGELOG.md); install from `main` to use it before the release.
 
 ## License
 
