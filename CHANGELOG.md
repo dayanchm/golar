@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## v0.8.0 — 2026-11-09
+
+Covers the v0.6.0, v0.7.0 and v0.8.0 milestones, which are released together:
+validation and API resources, the Vite integration, file storage and the cache.
+Install the CLI with `go install github.com/dayanchm/golar/cmd/golar@v0.8.0`;
+generated projects require `github.com/dayanchm/golar v0.8.0`. Read Changed
+before upgrading: element structs in collections are now validated.
 
 ### Added
 
@@ -31,7 +37,6 @@
   frontend and the server; `golar make:frontend react|vue|svelte` adds a
   frontend to an existing project.
 - **Docs:** a full-stack guide (`docs/frontend.md`).
-
 - **Storage** (`storage`): the `Disk` interface; `Local`, which stays inside
   its directory through `os.Root`, writes atomically and serves files with
   `Handler` (Range, nosniff, sandbox CSP, HMAC-signed URLs for private disks);
@@ -56,6 +61,8 @@
 - Generated Full Stack projects serve `frontend/dist` with `vite.SPA`. Web
   projects with a frontend now render their pages in Go and load the bundle
   with `{{vite ...}}` instead of replacing them with `frontend/dist/index.html`.
+- Generated projects default to `github.com/dayanchm/golar v0.8.0`, and
+  `golar version` reports `0.8.0`.
 
 ## v0.5.1 — 2026-10-28
 

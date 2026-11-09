@@ -96,12 +96,10 @@ All items **missing**.
 
 ## Next steps
 
-Phases 1 to 3 are merged: #57, #58, #59 and #64. They are listed under
-Unreleased in `CHANGELOG.md`; the latest release is still v0.5.1.
+Phases 1 to 3 (#57, #58, #59 and #64) were released together as v0.8.0.
 
-1. Publish the merged work (#61).
-2. Phase 4: queue (#65), events (#66) and notifications (#67).
-3. Phase 5: `golar mcp` (#68). The rest of the phase is not yet scoped.
+1. Phase 4: queue (#65), events (#66) and notifications (#67).
+2. Phase 5: `golar mcp` (#68). The rest of the phase is not yet scoped.
 
 The known limitations above are tracked as #69 (S3 multipart uploads), #70
 (reloading Go code in `golar serve`), #71 (`make:frontend` editing bootstrap)

@@ -42,13 +42,13 @@ See the [roadmap](#roadmap) for what is coming next.
 Go 1.27 or newer. Install the CLI:
 
 ```sh
-go install github.com/dayanchm/golar/cmd/golar@v0.5.1
+go install github.com/dayanchm/golar/cmd/golar@v0.8.0
 ```
 
 Make sure `$(go env GOPATH)/bin` is on your `PATH`. From a checkout of this
 repository, `go install ./cmd/golar` installs the development version.
 Applications that only use the framework can add it with
-`go get github.com/dayanchm/golar@v0.5.1`. Changes are listed in
+`go get github.com/dayanchm/golar@v0.8.0`. Changes are listed in
 [CHANGELOG.md](CHANGELOG.md).
 
 ## Quick start
@@ -169,7 +169,7 @@ project. It supports flat scalars and JSON, not nested YAML.
 Inside a Golar checkout the CLI detects the source tree and adds a `replace`
 directive; pass `--framework-dir /path/to/golar` to choose it explicitly.
 Elsewhere, projects require the tagged release given by `--framework-version`
-(default `v0.5.1`). Remove local replacements before distributing a project.
+(default `v0.8.0`). Remove local replacements before distributing a project.
 
 ## Applications and errors
 
@@ -446,14 +446,14 @@ Planned work is tracked in [GitHub milestones](https://github.com/dayanchm/golar
 
 | Milestone | Scope | State |
 | --- | --- | --- |
-| v0.6.0 | Validation rules, locales, form requests and API resources | merged, unreleased |
-| v0.7.0 | Vite integration, `golar serve` with Vite, `golar build` | merged, unreleased |
-| v0.8.0 | File storage (local and S3) and cache | merged, unreleased |
+| v0.6.0 | Validation rules, locales, form requests and API resources | released in v0.8.0 |
+| v0.7.0 | Vite integration, `golar serve` with Vite, `golar build` | released in v0.8.0 |
+| v0.8.0 | File storage (local and S3) and cache | released in v0.8.0 |
 | v0.9.0 | Queue, events and notifications | planned |
 | v0.10.0 | AI integration, starting with `golar mcp` for coding agents | planned |
 
-Merged but unreleased work is listed under Unreleased in the
-[changelog](CHANGELOG.md); install from `main` to use it before the release.
+v0.6.0 to v0.8.0 were released together as v0.8.0; see the
+[changelog](CHANGELOG.md).
 
 ## License
 
