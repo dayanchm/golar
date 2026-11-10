@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.8.0 — 2026-11-09
+## v0.8.0 — 2026-11-10
 
 Covers the v0.6.0, v0.7.0 and v0.8.0 milestones, which are released together:
 validation and API resources, the Vite integration, file storage and the cache.
