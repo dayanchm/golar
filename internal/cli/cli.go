@@ -65,6 +65,8 @@ func (c *CLI) Run(ctx context.Context, args []string) error {
 		return c.migrationCommand(ctx, args[0], args[1:])
 	case "new":
 		return c.newProject(args[1:])
+	case "mcp":
+		return c.mcp(ctx, args[1:])
 	case "serve", "routes", "doctor":
 		return c.projectCommand(ctx, args[0], args[1:])
 	default:
@@ -80,6 +82,7 @@ func (c *CLI) help() {
   golar serve [--dir project] [--addr :8080] [--no-vite] [--vite-port 5173]
   golar routes [--dir project]
   golar doctor [--dir project]
+  golar mcp [--dir project]        read-only MCP server on stdio for coding agents
   golar make:migration <name> [--dir project]
   golar make:request <name> [--dir project]
   golar make:frontend react|vue|svelte [--dir project]

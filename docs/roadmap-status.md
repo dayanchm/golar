@@ -92,7 +92,16 @@ Known limitations:
 
 ## Phase 5 — v0.10.0: AI integration
 
-All items **missing**.
+Scope, settled in #68: give coding agents accurate, read-only context about a
+project through MCP. Tools that change a project, and AI features inside
+applications, are not in this phase.
+
+| Item | Status | Notes |
+| --- | --- | --- |
+| `golar mcp` server | done (#68) | stdio MCP server, protocol versions 2024-11-05 to 2025-06-18 |
+| Routes, schema and models | done (#68) | `list_routes`, `describe_schema` (SQLite, PostgreSQL, MySQL), `list_models`, `list_migrations`, `project_info` |
+| Read-only tools and secrets | done (#68) | every tool is read-only; `.env` values and DSN parts are redacted from all output |
+| Write tools | not planned | would need an explicit start-up flag and `destructiveHint` |
 
 ## Next steps
 
