@@ -36,6 +36,7 @@ the standard library: `net/http` handlers, `database/sql` connections and
   counters.
 - **Queue:** background jobs with delays, retries, failed job storage and
   workers that never run a job twice at once; `golar queue:work`.
+- **Events:** typed listeners that run inline or on the queue.
 
 See the [roadmap](#roadmap) for what is coming next.
 
