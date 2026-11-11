@@ -88,7 +88,7 @@ Known limitations:
 | Mail foundation | existing | `mail` package (#45) |
 | SMTP driver | existing | STARTTLS required by default, TLS, none |
 | Email templates | existing | `mail.Template`, HTML escaped |
-| Notifications | missing | |
+| Notifications | done (#67) | `notify`: mail and database channels, read and unread state, queued delivery |
 
 ## Phase 5 — v0.10.0: AI integration
 
@@ -98,7 +98,7 @@ All items **missing**.
 
 Phases 1 to 3 (#57, #58, #59 and #64) were released together as v0.8.0.
 
-1. Phase 4: queue (#65), events (#66) and notifications (#67).
+1. Phase 4 (#65, #66, #67) is done; release it as v0.9.0.
 2. Phase 5: `golar mcp` (#68). The rest of the phase is not yet scoped.
 
 The known limitations above are tracked as #69 (S3 multipart uploads), #70
