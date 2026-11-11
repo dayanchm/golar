@@ -37,6 +37,10 @@ jobs:
         env:
           GOLAR_TEST_DRIVER: postgres
           GOLAR_TEST_DSN: postgres://golar:test-only@localhost:5432/golar_test?sslmode=disable
+      - run: go test -run TestReadSchemaServers ./internal/cli/
+        env:
+          GOLAR_TEST_DRIVER: postgres
+          GOLAR_TEST_DSN: postgres://golar:test-only@localhost:5432/golar_test?sslmode=disable
   mysql:
     runs-on: ubuntu-latest
     services:
@@ -58,6 +62,10 @@ jobs:
         with:
           go-version-file: go.mod
       - run: go test -race ./database/... ./auth/... ./validation/... ./http/session/... ./cache/...
+        env:
+          GOLAR_TEST_DRIVER: mysql
+          GOLAR_TEST_DSN: golar:test-only@tcp(localhost:3306)/golar_test?parseTime=true
+      - run: go test -run TestReadSchemaServers ./internal/cli/
         env:
           GOLAR_TEST_DRIVER: mysql
           GOLAR_TEST_DSN: golar:test-only@tcp(localhost:3306)/golar_test?parseTime=true

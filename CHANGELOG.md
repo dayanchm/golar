@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **CLI:** `golar mcp` serves the Model Context Protocol on stdio with
+  read-only tools for coding agents: `project_info`, `list_routes`,
+  `describe_schema`, `list_models` and `list_migrations`. `.env` values,
+  including the parts of DSNs, are redacted from every response.
+
 ## v0.8.0 — 2026-11-10
 
 Covers the v0.6.0, v0.7.0 and v0.8.0 milestones, which are released together:
