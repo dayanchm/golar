@@ -1,0 +1,17 @@
+{
+  "name": "golar-scaffold-npm-versions",
+  "private": true,
+  "description": "Versions golar new writes into generated frontends. Dependabot keeps them current; nothing installs this file.",
+  "dependencies": {
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "svelte": "5.57.2",
+    "vue": "3.5.43"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "7.3.1",
+    "@vitejs/plugin-react": "6.1.2",
+    "@vitejs/plugin-vue": "6.0.9",
+    "vite": "8.3.4"
+  }
+}
