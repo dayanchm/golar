@@ -199,10 +199,10 @@ type UpdatePost struct {
     End   string `json:"end" validate:"required,date"`
 }
 
-// Authorize runs first; return httpcontext.ErrForbidden for 403.
+// Authorize runs first; return golar.ErrForbidden for 403.
 func (r *UpdatePost) Authorize(c *golar.Context) error {
     if !canEdit(c.Context(), c.Param("id")) {
-        return httpcontext.ErrForbidden
+        return golar.ErrForbidden
     }
     return nil
 }
