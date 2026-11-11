@@ -191,9 +191,9 @@ Handlers receive `*golar.Context` and return an error:
 | `&golar.HTTPError{Code: 404, Message: "Post not found"}` | that status and message |
 | `*validation.Error`, for example from `c.Validate` | `422 {"errors": {"field": ["message"]}}` |
 | `*http.MaxBytesError`, from the body limits or `BodyLimit` | `413` |
-| `httpcontext.ErrUnsupportedMediaType` from `c.Bind` | `415` |
+| `golar.ErrUnsupportedMediaType` from `c.Bind` | `415` |
 | a body `c.Bind` cannot decode, or a missing upload | `400 Invalid request body` |
-| `*httpcontext.InputError`, for example from `c.QueryInt` | `400 Invalid query parameter "page"` |
+| `*golar.InputError`, for example from `c.QueryInt` | `400 Invalid query parameter "page"` |
 | anything else | logged, generic `500` |
 
 Once a response has started, later errors are only logged. Replace the handler

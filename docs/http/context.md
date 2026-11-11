@@ -11,7 +11,7 @@ turns them into the right status.
 id := c.Param("id")                 // route parameter
 q := c.Query("q")                   // "" when missing
 sort := c.QueryDefault("sort", "name")
-page, err := c.QueryInt("page", 1)  // *httpcontext.InputError when not an integer
+page, err := c.QueryInt("page", 1)  // *golar.InputError when not an integer
 name := c.Form("name")              // URL-encoded or multipart body field
 ctx := c.Context()                  // request context, canceled on disconnect
 ```
@@ -62,7 +62,7 @@ empty values for non-string fields, leave the field unchanged so
 Bodies are read through `http.MaxBytesReader`. Larger bodies fail with
 `*http.MaxBytesError`, which the default error handler renders as 413.
 
-| `httpcontext.Config` field | Default | Applies to |
+| `golar.ContextConfig` field | Default | Applies to |
 | --- | --- | --- |
 | `MaxBodySize` | 4 MiB | JSON, URL-encoded and other bodies |
 | `MaxMultipartSize` | 32 MiB | the whole multipart body, files included |
@@ -71,7 +71,7 @@ Bodies are read through `http.MaxBytesReader`. Larger bodies fail with
 A negative size disables a limit. Set them for the application:
 
 ```go
-app.SetContextConfig(httpcontext.Config{
+app.SetContextConfig(golar.ContextConfig{
     MaxBodySize:      1 << 20,
     MaxMultipartSize: 100 << 20,
 })
@@ -150,7 +150,7 @@ Without trusted proxies, `IP` returns the connection address and ignores
 addresses:
 
 ```go
-app.SetContextConfig(httpcontext.Config{
+app.SetContextConfig(golar.ContextConfig{
     TrustedProxies: []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")},
 })
 ```

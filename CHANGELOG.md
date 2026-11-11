@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Root package:** `golar.ContextConfig`, `InputError`, `BindError`,
+  `Authorizer`, `Preparer`, `Template`, `ErrForbidden` and
+  `ErrUnsupportedMediaType` re-export the request context's types, so
+  applications no longer import `http/context` for them.
+
 ## v0.8.0 — 2026-11-10
 
 Covers the v0.6.0, v0.7.0 and v0.8.0 milestones, which are released together:
