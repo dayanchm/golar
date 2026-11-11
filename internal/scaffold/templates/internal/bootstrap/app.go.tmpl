@@ -11,6 +11,7 @@ import (
 {{if ne .Auth "none"}} "{{.Module}}/internal/auth"
  "github.com/dayanchm/golar/mail"{{end}}
 {{if eq .Template "fullstack"}} "github.com/dayanchm/golar/http/vite"
+ "{{.Module}}/frontend"
 {{else if ne .Frontend "none"}} "{{.Module}}/web"
 {{end}})
 
@@ -40,9 +41,10 @@ func build(db *database.DB{{if ne .Auth "none"}},mailer mail.Mailer{{end}}) (*go
   middleware.BodyLimit(10<<20), // 10 MiB
   middleware.Compress(),
  )
-{{if eq .Template "fullstack"}} // Serves frontend/dist with an index.html fallback for client-side routes.
- // In development, open the Vite dev server instead; it proxies /api here.
- app.Use(vite.New(vite.Config{}).SPA(vite.PathPrefix("/api","/health")))
+{{if eq .Template "fullstack"}} // Serves the built frontend with an index.html fallback for client-side
+ // routes: embedded by golar build, else read from frontend/dist. In
+ // development, open the Vite dev server instead; it proxies /api here.
+ app.Use(vite.New(vite.Config{FS:frontend.FS}).SPA(vite.PathPrefix("/api","/health")))
 {{else if ne .Frontend "none"}} // Serves the built frontend; web/templates/index.html includes it with {{"{{"}}vite ...{{"}}"}}.
  app.Use(web.Assets.Files)
 {{end}}

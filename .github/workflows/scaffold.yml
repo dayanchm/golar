@@ -93,13 +93,16 @@ jobs:
           npm install --no-audit --no-fund
           cd ..
           "$RUNNER_TEMP/golar" build
-      # The built server must link the hashed bundle and serve it.
+      # The built server must link the hashed bundle and serve it on its own.
       - name: Serve built frontend
         if: matrix.frontend != 'none'
         run: |
           cd "$RUNNER_TEMP/demo"
           test -f frontend/dist/.vite/manifest.json
-          APP_ADDR=127.0.0.1:18080 ./bin/server &
+          # golar build embeds the frontend, so run the binary from elsewhere.
+          mkdir "$RUNNER_TEMP/deploy" && cp bin/server "$RUNNER_TEMP/deploy/"
+          cd "$RUNNER_TEMP/deploy"
+          APP_ADDR=127.0.0.1:18080 ./server &
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:18080/health >/dev/null && break; sleep 1; done
           page=$(curl -sf http://127.0.0.1:18080/)
           asset=$(printf '%s' "$page" | grep -o '/assets/[^"]*\.js' | head -n 1)

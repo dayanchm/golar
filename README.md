@@ -115,7 +115,7 @@ golar serve --addr :8080         # builds and runs the app; also runs Vite for f
 golar build                      # npm run build, then go build into bin/server
 golar make:migration create_posts_table
 golar make:request StorePost     # app/requests/store_post_request.go
-golar make:frontend react        # adds a Vite frontend to a project without one
+golar make:frontend react        # adds a Vite frontend and wires it into an untouched bootstrap
 golar migrate                    # also migrate:status, :rollback, :reset, :refresh, --pretend
 ```
 

@@ -100,7 +100,8 @@ In production, Go serves frontend/dist and answers client-side routes with its
 index.html.{{else}}Open http://localhost:8080 while developing. web/templates/index.html loads the
 bundle with `{{"{{"}}vite "{{if eq .Frontend "react"}}src/main.jsx{{else}}src/main.js{{end}}"{{"}}"}}`, which points at Vite during `golar serve`
 and at the hashed files in frontend/dist after a build.{{end}}
-Run the binary from the project directory, or deploy frontend/dist next to it.
+`golar build` embeds frontend/dist in bin/server (with `-tags golar_embed`), so the
+binary runs from any directory; `go run` and `golar serve` read frontend/dist from disk.
 `golar serve --no-vite` starts only Go; `npm run dev` in frontend still works
 on its own, with GOLAR_BACKEND_URL changing its proxy target.
 Frontend HTML and assets are served by middleware and do not appear in the route list.

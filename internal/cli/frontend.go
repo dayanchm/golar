@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"flag"
@@ -134,13 +135,26 @@ func (c *CLI) buildProject(ctx context.Context, args []string) error {
 	if !filepath.IsAbs(binary) {
 		binary = filepath.Join(*root, binary)
 	}
+	// Embed the frontend when it is built and the project has the frontend
+	// package that embeds it; projects made before it read dist from disk.
+	embed := config.Frontend != "none" &&
+		exists(filepath.Join(*root, "frontend", "dist", ".vite", "manifest.json")) &&
+		exists(filepath.Join(*root, "frontend", "embed.go"))
+	buildArgs := []string{"go", "build", "-trimpath"}
+	if embed {
+		buildArgs = append(buildArgs, "-tags", "golar_embed")
+	}
+	buildArgs = append(buildArgs, "-o", binary, "./cmd/server")
 	fmt.Fprintln(c.Out, "Building server (go build)")
-	if err := c.run(ctx, *root, env, c.Err, "go", "build", "-trimpath", "-o", binary, "./cmd/server"); err != nil {
+	if err := c.run(ctx, *root, env, c.Err, buildArgs...); err != nil {
 		return fmt.Errorf("build server (try go mod tidy): %w", err)
 	}
 	fmt.Fprintln(c.Out, "Built", binary)
-	if config.Frontend != "none" {
-		fmt.Fprintln(c.Out, "Run it from the project directory, or ship frontend/dist next to it.")
+	switch {
+	case embed:
+		fmt.Fprintln(c.Out, "The frontend is embedded; the binary runs from any directory.")
+	case config.Frontend != "none":
+		fmt.Fprintln(c.Out, "The frontend is not embedded: run the binary from the project directory, or ship frontend/dist next to it.")
 	}
 	return nil
 }
@@ -227,14 +241,89 @@ func (c *CLI) makeFrontend(args []string) error {
 		fmt.Fprintf(c.Out, " and template: %s", updated.Template)
 	}
 	fmt.Fprintln(c.Out, " in golar.yaml.")
-	if updated.Template == "web" {
+	wired, edited, err := wireFrontend(*root, config, updated)
+	if err != nil {
+		return fmt.Errorf("frontend added, but wiring it failed: %w", err)
+	}
+	if len(wired) > 0 {
+		fmt.Fprintf(c.Out, "Updated %s to serve it.\n", strings.Join(wired, ", "))
+	}
+	if len(edited) > 0 {
+		fmt.Fprintf(c.Out, "%s changed since golar new, so it was left alone.\n", strings.Join(edited, ", "))
+		c.printFrontendWiring(updated.Template, framework, updated.Module)
+		return nil
+	}
+	fmt.Fprintln(c.Out, "Run npm install in frontend, then golar serve.")
+	return nil
+}
+
+// wiredFiles are the generated Go and template files that differ once a
+// project has a frontend.
+var wiredFiles = []string{"internal/bootstrap/app.go", "web/render.go", "web/templates/index.html"}
+
+// wireFrontend updates the files golar new would have generated differently
+// with the frontend. A file is replaced only when it is byte for byte what
+// golar new generated for the old configuration, so custom code is never
+// overwritten; changed files are returned in edited for the user to update.
+func wireFrontend(root string, before, after project.Config) (wired, edited []string, err error) {
+	options := func(c project.Config) scaffold.Options {
+		return scaffold.Options{Name: c.Name, Module: c.Module, Template: c.Template, Database: c.Database, Frontend: c.Frontend, Auth: c.Auth, Docker: c.Docker}
+	}
+	old, err := scaffold.Render(options(before))
+	if err != nil {
+		return nil, nil, err
+	}
+	next, err := scaffold.Render(options(after))
+	if err != nil {
+		return nil, nil, err
+	}
+	type change struct {
+		path         string
+		name         string
+		original, to []byte
+	}
+	var changes []change
+	for _, name := range wiredFiles {
+		from, inOld := old[name]
+		to, inNext := next[name]
+		if !inOld || !inNext || bytes.Equal(from, to) {
+			continue
+		}
+		path := filepath.Join(root, filepath.FromSlash(name))
+		current, err := os.ReadFile(path)
+		if err != nil || !bytes.Equal(current, from) {
+			edited = append(edited, name)
+			continue
+		}
+		changes = append(changes, change{path, name, current, to})
+	}
+	for i, ch := range changes {
+		if err := replaceFile(ch.path, ch.to); err != nil {
+			for _, done := range changes[:i] {
+				_ = replaceFile(done.path, done.original)
+			}
+			return nil, nil, err
+		}
+		wired = append(wired, ch.name)
+	}
+	return wired, edited, nil
+}
+
+// printFrontendWiring explains the changes wireFrontend could not make.
+func (c *CLI) printFrontendWiring(template, framework, module string) {
+	if template == "web" {
 		entry, refresh := "src/main.js", ""
 		if framework == "react" {
 			entry, refresh = "src/main.jsx", "{{vite_react_refresh}}"
 		}
 		fmt.Fprintf(c.Out, `Load it in your pages. In web/render.go:
 
-    var Assets = vite.New(vite.Config{}) // import "github.com/dayanchm/golar/http/vite"
+    import (
+        "github.com/dayanchm/golar/http/vite"
+        "%[3]s/frontend"
+    )
+
+    var Assets = vite.New(vite.Config{FS: frontend.FS})
     var Templates = template.Must(template.New("").Funcs(Assets.FuncMap()).ParseFS(files, "templates/*.html"))
 
 in internal/bootstrap/app.go, after the default middleware:
@@ -243,20 +332,23 @@ in internal/bootstrap/app.go, after the default middleware:
 
 and in the <head> of a page, with <div id="app"></div> in its body:
 
-    %s{{vite %q}}
+    %[1]s{{vite %[2]q}}
 
 Then run npm install in frontend and golar serve.
-`, refresh, entry)
-		return nil
+`, refresh, entry, module)
+		return
 	}
-	fmt.Fprintln(c.Out, `Serve the build from internal/bootstrap/app.go, after the default middleware:
+	fmt.Fprintf(c.Out, `Serve the build from internal/bootstrap/app.go, after the default middleware:
 
-    import "github.com/dayanchm/golar/http/vite"
+    import (
+        "github.com/dayanchm/golar/http/vite"
+        "%s/frontend"
+    )
 
-    app.Use(vite.New(vite.Config{}).SPA(vite.PathPrefix("/api", "/health")))
+    app.Use(vite.New(vite.Config{FS: frontend.FS}).SPA(vite.PathPrefix("/api", "/health")))
 
-Then run npm install in frontend and golar serve.`)
-	return nil
+Then run npm install in frontend and golar serve.
+`, module)
 }
 
 func writeNew(path string, body []byte) error {
@@ -288,4 +380,9 @@ func replaceFile(path string, body []byte) error {
 		_ = os.Remove(tmp.Name())
 	}
 	return err
+}
+
+func exists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
