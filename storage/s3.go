@@ -10,7 +10,6 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
-	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -38,8 +37,15 @@ type S3Config struct {
 	// PublicURL is the base of permanent URLs, such as a CDN; it defaults to
 	// the bucket's URL.
 	PublicURL string
-	// HTTPClient defaults to a client with a 5 minute timeout.
+	// HTTPClient defaults to a client with a 5 minute timeout per request;
+	// a multipart upload makes one request per part.
 	HTTPClient *http.Client
+	// PartSize is the size of each part of a multipart upload, 16 MiB by
+	// default and at least 5 MiB. Uploads up to PartSize use a single PUT;
+	// larger ones, and those of unknown size, are uploaded in parts, with at
+	// most one part held in memory. It grows for large uploads of known size
+	// to stay within S3's 10,000 parts.
+	PartSize int64
 }
 
 // S3 stores files in a bucket. Uploads and downloads are streamed.
@@ -48,11 +54,21 @@ type S3 struct {
 	endpoint *url.URL
 	creds    sigCredentials
 	client   *http.Client
+	partSize int64
 	now      func() time.Time
 }
 
-// MaxS3Object is the largest single PUT that S3 accepts.
-const MaxS3Object = 5 << 30
+const (
+	// MaxS3Object is the largest single PUT that S3 accepts. Larger files
+	// are uploaded in parts.
+	MaxS3Object = 5 << 30
+	// MaxS3MultipartObject is the largest object S3 stores.
+	MaxS3MultipartObject = 5 << 40
+
+	minS3PartSize     = 5 << 20
+	defaultS3PartSize = 16 << 20
+	maxS3Parts        = 10000
+)
 
 // NewS3 validates config. It does not contact the service.
 func NewS3(config S3Config) (*S3, error) {
@@ -76,6 +92,13 @@ func NewS3(config S3Config) (*S3, error) {
 		}
 		config.Prefix = prefix
 	}
+	partSize := config.PartSize
+	switch {
+	case partSize == 0:
+		partSize = defaultS3PartSize
+	case partSize < minS3PartSize || partSize > MaxS3Object:
+		return nil, errors.New("storage: S3Config.PartSize must be between 5 MiB and 5 GiB")
+	}
 	client := config.HTTPClient
 	if client == nil {
 		client = &http.Client{Timeout: 5 * time.Minute}
@@ -85,6 +108,7 @@ func NewS3(config S3Config) (*S3, error) {
 		endpoint: endpoint,
 		creds:    sigCredentials{accessKey: config.AccessKeyID, secretKey: config.SecretAccessKey, sessionToken: config.SessionToken, region: config.Region},
 		client:   client,
+		partSize: partSize,
 		now:      time.Now,
 	}, nil
 }
@@ -176,45 +200,31 @@ func (s *S3) do(ctx context.Context, method string, u *url.URL, body io.Reader, 
 	return resp, nil
 }
 
-// sized returns r with its length, spooling readers of unknown length to a
-// temporary file so memory use stays flat. The caller runs cleanup.
-func sized(r io.Reader, size int64) (io.Reader, int64, func(), error) {
-	noop := func() {}
+// knownSize returns the number of bytes left in r when it can tell without
+// reading: from size, or from readers that report their length.
+func knownSize(r io.Reader, size int64) (int64, bool) {
 	if size > 0 {
-		return r, size, noop, nil
+		return size, true
 	}
 	switch v := r.(type) {
 	case *bytes.Reader:
-		return v, int64(v.Len()), noop, nil
+		return int64(v.Len()), true
 	case *strings.Reader:
-		return v, int64(v.Len()), noop, nil
+		return int64(v.Len()), true
 	case *bytes.Buffer:
-		return v, int64(v.Len()), noop, nil
+		return int64(v.Len()), true
 	}
 	if seeker, ok := r.(io.Seeker); ok {
 		current, err := seeker.Seek(0, io.SeekCurrent)
 		if err == nil {
 			if end, err := seeker.Seek(0, io.SeekEnd); err == nil {
 				if _, err := seeker.Seek(current, io.SeekStart); err == nil {
-					return r, end - current, noop, nil
+					return end - current, true
 				}
 			}
 		}
 	}
-	tmp, err := os.CreateTemp("", "golar-s3-*")
-	if err != nil {
-		return nil, 0, noop, err
-	}
-	cleanup := func() { tmp.Close(); os.Remove(tmp.Name()) }
-	n, err := io.Copy(tmp, io.LimitReader(r, MaxS3Object+1))
-	if err == nil {
-		_, err = tmp.Seek(0, io.SeekStart)
-	}
-	if err != nil {
-		cleanup()
-		return nil, 0, noop, err
-	}
-	return tmp, n, cleanup, nil
+	return 0, false
 }
 
 func (s *S3) Put(ctx context.Context, p string, r io.Reader, opts PutOptions) error {
@@ -225,14 +235,6 @@ func (s *S3) Put(ctx context.Context, p string, r io.Reader, opts PutOptions) er
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	body, size, cleanup, err := sized(r, opts.Size)
-	if err != nil {
-		return err
-	}
-	defer cleanup()
-	if size > MaxS3Object {
-		return fmt.Errorf("storage: %s is larger than the 5 GiB S3 single-upload limit", name)
-	}
 	contentType := opts.ContentType
 	if contentType == "" {
 		contentType = mime.TypeByExtension(path.Ext(name))
@@ -240,14 +242,164 @@ func (s *S3) Put(ctx context.Context, p string, r io.Reader, opts PutOptions) er
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
+	size, known := knownSize(r, opts.Size)
+	if known && size > MaxS3MultipartObject {
+		return fmt.Errorf("storage: %s is larger than the 5 TiB S3 object limit", name)
+	}
+	if known && size <= s.partSize {
+		return s.putObject(ctx, name, r, size, contentType)
+	}
+	partSize := s.partSize
+	if known {
+		// Grow parts in whole MiB so the upload fits in maxS3Parts.
+		const mib = 1 << 20
+		if need := (size + maxS3Parts - 1) / maxS3Parts; need > partSize {
+			partSize = (need + mib - 1) / mib * mib
+		}
+		return s.putMultipart(ctx, name, r, contentType, partSize, size)
+	}
+	// Unknown size: read one part ahead to choose between a single PUT and
+	// a multipart upload.
+	first := make([]byte, partSize)
+	n, err := io.ReadFull(r, first)
+	switch {
+	case err == io.EOF || err == io.ErrUnexpectedEOF:
+		return s.putObject(ctx, name, bytes.NewReader(first[:n]), int64(n), contentType)
+	case err != nil:
+		return err
+	}
+	return s.putMultipart(ctx, name, io.MultiReader(bytes.NewReader(first), r), contentType, partSize, -1)
+}
+
+func (s *S3) putObject(ctx context.Context, name string, body io.Reader, size int64, contentType string) error {
+	// http.NoBody is passed as is: wrapped, a zero length would read as
+	// unknown and the request would be chunked, which S3 rejects.
 	if size == 0 {
 		body = http.NoBody
+	} else {
+		body = contextReader{ctx, body}
 	}
-	resp, err := s.do(ctx, http.MethodPut, s.objectURL(name), contextReader{ctx, body}, size, http.Header{"Content-Type": {contentType}})
+	resp, err := s.do(ctx, http.MethodPut, s.objectURL(name), body, size, http.Header{"Content-Type": {contentType}})
 	if err != nil {
 		return err
 	}
 	io.Copy(io.Discard, resp.Body)
+	return resp.Body.Close()
+}
+
+// uploadURL returns the object's URL with the given query.
+func (s *S3) uploadURL(name string, query url.Values) *url.URL {
+	u := s.objectURL(name)
+	u.RawQuery = canonicalQuery(query)
+	return u
+}
+
+// putMultipart uploads r in parts of partSize. size is the total length, or
+// -1 when unknown, in which case each part is buffered to learn its length.
+// Any failure aborts the upload so no parts are left behind.
+func (s *S3) putMultipart(ctx context.Context, name string, r io.Reader, contentType string, partSize, size int64) (err error) {
+	resp, err := s.do(ctx, http.MethodPost, s.uploadURL(name, url.Values{"uploads": {""}}), nil, 0, http.Header{"Content-Type": {contentType}})
+	if err != nil {
+		return err
+	}
+	var initiated struct {
+		UploadID string `xml:"UploadId"`
+	}
+	err = xml.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&initiated)
+	resp.Body.Close()
+	if err != nil || initiated.UploadID == "" {
+		return fmt.Errorf("storage: S3 multipart upload of %s: no upload ID (%v)", name, err)
+	}
+	uploadID := initiated.UploadID
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, s.abortMultipart(ctx, name, uploadID))
+		}
+	}()
+
+	type part struct {
+		XMLName    xml.Name `xml:"Part"`
+		PartNumber int
+		ETag       string
+	}
+	var parts []part
+	var buf []byte
+	if size < 0 {
+		buf = make([]byte, partSize)
+	}
+	for number := 1; ; number++ {
+		var body io.Reader
+		var length int64
+		if size >= 0 {
+			length = min(partSize, size)
+			size -= length
+			body = io.LimitReader(r, length)
+		} else {
+			n, readErr := io.ReadFull(r, buf)
+			if readErr != nil && readErr != io.EOF && readErr != io.ErrUnexpectedEOF {
+				return readErr
+			}
+			length, body = int64(n), bytes.NewReader(buf[:n])
+		}
+		if length == 0 && number > 1 {
+			break
+		}
+		if number > maxS3Parts {
+			return fmt.Errorf("storage: %s needs more than %d parts; set S3Config.PartSize or PutOptions.Size", name, maxS3Parts)
+		}
+		query := url.Values{"partNumber": {strconv.Itoa(number)}, "uploadId": {uploadID}}
+		resp, err := s.do(ctx, http.MethodPut, s.uploadURL(name, query), contextReader{ctx, body}, length, nil)
+		if err != nil {
+			return err
+		}
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+		parts = append(parts, part{PartNumber: number, ETag: resp.Header.Get("ETag")})
+		if length < partSize || size == 0 {
+			break
+		}
+	}
+
+	complete, err := xml.Marshal(struct {
+		XMLName xml.Name `xml:"CompleteMultipartUpload"`
+		Parts   []part
+	}{Parts: parts})
+	if err != nil {
+		return err
+	}
+	resp, err = s.do(ctx, http.MethodPost, s.uploadURL(name, url.Values{"uploadId": {uploadID}}), bytes.NewReader(complete), int64(len(complete)), http.Header{"Content-Type": {"application/xml"}})
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	// S3 can report a failed completion with 200 and an Error document.
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return err
+	}
+	var result struct {
+		XMLName xml.Name
+		Code    string
+		Message string
+	}
+	if xml.Unmarshal(body, &result) == nil && result.XMLName.Local == "Error" {
+		return &S3Error{Status: resp.StatusCode, Code: result.Code, Message: result.Message}
+	}
+	return nil
+}
+
+// abortMultipart removes an unfinished upload's parts. It runs even when ctx
+// was cancelled, since a cancelled upload must be cleaned up too.
+func (s *S3) abortMultipart(ctx context.Context, name, uploadID string) error {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+	defer cancel()
+	resp, err := s.do(ctx, http.MethodDelete, s.uploadURL(name, url.Values{"uploadId": {uploadID}}), nil, 0, nil)
+	if err != nil {
+		if errors.Is(err, ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("storage: abort multipart upload of %s: %w", name, err)
+	}
 	return resp.Body.Close()
 }
 
