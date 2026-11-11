@@ -234,11 +234,15 @@ func TestIncrement(t *testing.T) {
 		}
 
 		// Existing expiry is kept; an expired value starts again without one.
-		must(t, store.Put(ctx, "window", []byte("1"), 40*time.Millisecond))
+		// As in TestExpiry, leave room for slow databases under -race and
+		// wait from after Put, when the expiry has been set.
+		const window = 300 * time.Millisecond
+		must(t, store.Put(ctx, "window", []byte("1"), window))
+		written := time.Now()
 		if n, err := store.Increment(ctx, "window", 1); n != 2 || err != nil {
 			t.Fatalf("Increment(window) = %d, %v", n, err)
 		}
-		time.Sleep(60 * time.Millisecond)
+		time.Sleep(time.Until(written.Add(window + 20*time.Millisecond)))
 		if _, ok, _ := store.Get(ctx, "window"); ok {
 			t.Fatal("Increment extended the expiry")
 		}
