@@ -83,7 +83,7 @@ Known limitations:
 
 | Item | Status | Notes |
 | --- | --- | --- |
-| Queue (all items) | missing | |
+| Queue (all items) | done (#65) | `queue`: sync and database drivers, delays, retries with backoff, failed jobs, `Work` with graceful shutdown; `golar queue:work` and `internal/queue` in generated projects |
 | Events (all items) | missing | |
 | Mail foundation | existing | `mail` package (#45) |
 | SMTP driver | existing | STARTTLS required by default, TLS, none |

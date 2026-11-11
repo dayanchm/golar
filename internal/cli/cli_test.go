@@ -238,3 +238,30 @@ func TestRequestGenerator(t *testing.T) {
 		t.Fatal("generated a request outside a Golar project")
 	}
 }
+
+func TestQueueWork(t *testing.T) {
+	c, out := testCLI(t)
+	root, err := scaffold.Create(c.Dir, scaffold.Options{Name: "demo", Database: "sqlite"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var calls [][]string
+	c.run = func(_ context.Context, _ string, _ []string, _ io.Writer, args ...string) error {
+		calls = append(calls, append([]string(nil), args...))
+		return nil
+	}
+	if err := c.Run(context.Background(), []string{"queue:work", "--dir", root}); err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 2 || calls[0][1] != "build" || calls[1][len(calls[1])-1] != "--work" || !strings.Contains(out.String(), "Working the demo queue") {
+		t.Fatalf("calls = %v, output %q", calls, out.String())
+	}
+	none, err := scaffold.Create(c.Dir, scaffold.Options{Name: "plain"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls = nil
+	if err := c.Run(context.Background(), []string{"queue:work", "--dir", none}); err == nil || !strings.Contains(err.Error(), "needs a database") || len(calls) != 0 {
+		t.Errorf("queue:work without a database = %v, calls %v", err, calls)
+	}
+}

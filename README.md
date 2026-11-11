@@ -34,6 +34,8 @@ the standard library: `net/http` handlers, `database/sql` connections and
   files, signed temporary URLs and sniffed upload validation.
 - **Cache:** memory, file and database stores with expiry, `Remember` and atomic
   counters.
+- **Queue:** background jobs with delays, retries, failed job storage and
+  workers that never run a job twice at once; `golar queue:work`.
 
 See the [roadmap](#roadmap) for what is coming next.
 

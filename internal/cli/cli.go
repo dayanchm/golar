@@ -65,7 +65,7 @@ func (c *CLI) Run(ctx context.Context, args []string) error {
 		return c.migrationCommand(ctx, args[0], args[1:])
 	case "new":
 		return c.newProject(args[1:])
-	case "serve", "routes", "doctor":
+	case "serve", "routes", "doctor", "queue:work":
 		return c.projectCommand(ctx, args[0], args[1:])
 	default:
 		return fmt.Errorf("unknown command %q; run golar help", args[0])
@@ -79,6 +79,7 @@ func (c *CLI) help() {
                    [--framework-dir path | --framework-version version]
   golar serve [--dir project] [--addr :8080] [--no-vite] [--vite-port 5173]
   golar routes [--dir project]
+  golar queue:work [--dir project]
   golar doctor [--dir project]
   golar make:migration <name> [--dir project]
   golar make:request <name> [--dir project]
@@ -298,6 +299,9 @@ func (c *CLI) projectCommand(ctx context.Context, name string, args []string) er
 	if name == "doctor" {
 		return c.doctor(ctx, *root, config, env)
 	}
+	if name == "queue:work" && config.Database == "none" {
+		return fmt.Errorf("the queue worker needs a database; this project has none")
+	}
 	tmp, err := os.MkdirTemp("", "golar-run-")
 	if err != nil {
 		return err
@@ -312,6 +316,10 @@ func (c *CLI) projectCommand(ctx context.Context, name string, args []string) er
 	}
 	if name == "routes" {
 		return c.run(ctx, *root, env, c.Out, binary, "--routes")
+	}
+	if name == "queue:work" {
+		fmt.Fprintf(c.Out, "Working the %s queue (Ctrl+C to stop after running jobs finish)\n", config.Name)
+		return c.run(ctx, *root, env, c.Out, binary, "--work")
 	}
 	address := config.Address
 	for _, entry := range env {

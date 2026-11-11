@@ -1,0 +1,23 @@
+// Package jobs registers the application's background jobs.
+package jobs
+
+import (
+ "context"
+ "log"
+
+ "github.com/dayanchm/golar/queue"
+)
+
+// Example is the payload of the example job; payloads are stored as JSON.
+type Example struct {
+ Message string `json:"message"`
+}
+
+// Register adds a handler for each job. Every process that dispatches or
+// works jobs calls it, so add new jobs here.
+func Register(q *queue.Queue) {
+ queue.Handle(q,"example",func(ctx context.Context,job Example) error {
+  log.Printf("example job: %s",job.Message)
+  return nil
+ },queue.Tries(3))
+}

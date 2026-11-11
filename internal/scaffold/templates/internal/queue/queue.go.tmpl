@@ -1,0 +1,44 @@
+// Package queue holds the application's job queue.
+package queue
+
+import (
+ "context"
+ "fmt"
+ "os"
+
+ golar "github.com/dayanchm/golar/queue"
+ "{{.Module}}/app/jobs"
+ "{{.Module}}/internal/database"
+)
+
+// Jobs dispatches the application's jobs, for example:
+//
+//	golar.Dispatch(ctx,queue.Jobs,"example",jobs.Example{Message:"hi"})
+//
+// Until Init runs, jobs run as they are dispatched.
+var Jobs=newQueue(nil)
+
+// Init selects the driver named by QUEUE_DRIVER: sync (the default) runs each
+// job during Dispatch; database stores jobs for golar queue:work, once
+// golar migrate has created the jobs tables.
+func Init(db *database.DB) error {
+ switch driver:=os.Getenv("QUEUE_DRIVER");driver {
+ case "","sync":
+  Jobs=newQueue(nil)
+ case "database":
+  Jobs=newQueue(&golar.SQLStore{DB:db})
+ default:
+  return fmt.Errorf("unknown QUEUE_DRIVER %q; use sync or database",driver)
+ }
+ return nil
+}
+
+func newQueue(store golar.Store) *golar.Queue {
+ q:=golar.NewSync()
+ if store!=nil{q=golar.New(store)}
+ jobs.Register(q)
+ return q
+}
+
+// Work runs queued jobs until ctx ends, then lets running jobs finish.
+func Work(ctx context.Context) error {return Jobs.Work(ctx,golar.WorkOptions{})}

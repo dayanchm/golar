@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Queue** (`queue`): jobs with typed JSON payloads registered by name with
+  `Handle` and sent with `Dispatch`; `NewSync` runs them inline and
+  `SQLStore` keeps them in the `jobs` table. `Delay`, `OnQueue`, `Tries`,
+  `Timeout` and `WithBackoff`; failed jobs move to `failed_jobs`, with
+  `Failed`, `Retry` and `Forget`. `Work` runs jobs with a concurrency limit,
+  never hands one job to two workers, and lets running jobs finish on
+  shutdown.
+- **Application:** `RunCommand` runs a function between the startup and
+  shutdown hooks without serving HTTP.
+- **CLI and scaffold:** projects with a database get `app/jobs`,
+  `internal/queue`, a jobs migration, `QUEUE_DRIVER` and a `--work` server
+  flag; `golar queue:work` runs the worker.
+
 ## v0.8.0 — 2026-11-10
 
 Covers the v0.6.0, v0.7.0 and v0.8.0 milestones, which are released together:
