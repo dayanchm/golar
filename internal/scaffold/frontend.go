@@ -1,20 +1,50 @@
 package scaffold
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"strings"
 )
 
+// npmPackage lists the npm versions generated frontends use. It is a real
+// package.json so Dependabot can propose updates.
+//
+//go:embed npm/package.json
+var npmPackage []byte
+
+var npmVersions = func() map[string]string {
+	var pkg struct{ Dependencies, DevDependencies map[string]string }
+	if err := json.Unmarshal(npmPackage, &pkg); err != nil {
+		panic("scaffold: npm/package.json: " + err.Error())
+	}
+	versions := map[string]string{}
+	for _, m := range []map[string]string{pkg.Dependencies, pkg.DevDependencies} {
+		for name, version := range m {
+			versions[name] = version
+		}
+	}
+	return versions
+}()
+
+// npmVersion returns the pinned version of an npm package.
+func npmVersion(name string) string {
+	version, ok := npmVersions[name]
+	if !ok {
+		panic("scaffold: npm/package.json has no version for " + name)
+	}
+	return version
+}
+
 func renderFrontend(files map[string][]byte, d data) error {
 	dependencies := map[string]string{}
-	development := map[string]string{"vite": "8.3.4"}
+	development := map[string]string{"vite": npmVersion("vite")}
 	var config, main, component string
 	switch d.Frontend {
 	case "react":
-		dependencies["react"] = "19.3.0"
-		dependencies["react-dom"] = "19.3.0"
-		development["@vitejs/plugin-react"] = "6.1.2"
+		dependencies["react"] = npmVersion("react")
+		dependencies["react-dom"] = npmVersion("react-dom")
+		development["@vitejs/plugin-react"] = npmVersion("@vitejs/plugin-react")
 		config = `import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 export default defineConfig({ plugins: [react()], build: { manifest: true__INPUT__ }, server: { origin: process.env.VITE_DEV_SERVER_URL, proxy: { '/api': process.env.GOLAR_BACKEND_URL || 'http://localhost:8080', '/health': process.env.GOLAR_BACKEND_URL || 'http://localhost:8080' } } });
@@ -41,8 +71,8 @@ export default function App() {
 		files["frontend/src/App.jsx"] = []byte(component)
 		files["frontend/src/main.jsx"] = []byte(main)
 	case "vue":
-		dependencies["vue"] = "3.5.43"
-		development["@vitejs/plugin-vue"] = "6.0.9"
+		dependencies["vue"] = npmVersion("vue")
+		development["@vitejs/plugin-vue"] = npmVersion("@vitejs/plugin-vue")
 		config = `import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 export default defineConfig({ plugins: [vue()], build: { manifest: true__INPUT__ }, server: { origin: process.env.VITE_DEV_SERVER_URL, proxy: { '/api': process.env.GOLAR_BACKEND_URL || 'http://localhost:8080', '/health': process.env.GOLAR_BACKEND_URL || 'http://localhost:8080' } } });
@@ -68,8 +98,8 @@ async function greet() {
 		files["frontend/src/App.vue"] = []byte(component)
 		files["frontend/src/main.js"] = []byte(main)
 	case "svelte":
-		dependencies["svelte"] = "5.57.2"
-		development["@sveltejs/vite-plugin-svelte"] = "7.3.1"
+		dependencies["svelte"] = npmVersion("svelte")
+		development["@sveltejs/vite-plugin-svelte"] = npmVersion("@sveltejs/vite-plugin-svelte")
 		config = `import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 export default defineConfig({ plugins: [svelte()], build: { manifest: true__INPUT__ }, server: { origin: process.env.VITE_DEV_SERVER_URL, proxy: { '/api': process.env.GOLAR_BACKEND_URL || 'http://localhost:8080', '/health': process.env.GOLAR_BACKEND_URL || 'http://localhost:8080' } } });
