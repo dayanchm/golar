@@ -1,9 +1,11 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -28,6 +30,16 @@ type fakeS3 struct {
 	mu      sync.Mutex
 	objects map[string]fakeObject
 	pages   int // List requests served
+	// uploads holds unfinished multipart uploads by ID; failPart makes that
+	// part number fail.
+	uploads  map[string]*fakeUpload
+	nextID   int
+	failPart int
+}
+
+type fakeUpload struct {
+	key, contentType string
+	parts            map[int][]byte
 }
 
 type fakeObject struct {
@@ -97,7 +109,60 @@ func (f *fakeS3) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	query := r.URL.Query()
 	switch {
+	case r.Method == http.MethodPost && query.Has("uploads"):
+		f.nextID++
+		id := "upload-" + strconv.Itoa(f.nextID)
+		f.uploads[id] = &fakeUpload{key: key, contentType: r.Header.Get("Content-Type"), parts: map[int][]byte{}}
+		fmt.Fprintf(w, `<InitiateMultipartUploadResult><Bucket>%s</Bucket><Key>%s</Key><UploadId>%s</UploadId></InitiateMultipartUploadResult>`, f.bucket, key, id)
+	case query.Has("uploadId"):
+		upload, ok := f.uploads[query.Get("uploadId")]
+		if !ok || upload.key != key {
+			w.WriteHeader(http.StatusNotFound)
+			io.WriteString(w, `<Error><Code>NoSuchUpload</Code></Error>`)
+			return
+		}
+		switch r.Method {
+		case http.MethodPut:
+			number, _ := strconv.Atoi(query.Get("partNumber"))
+			body, _ := io.ReadAll(r.Body)
+			if number < 1 || int64(len(body)) != r.ContentLength || number == f.failPart {
+				w.WriteHeader(http.StatusInternalServerError)
+				io.WriteString(w, `<Error><Code>InternalError</Code></Error>`)
+				return
+			}
+			upload.parts[number] = body
+			w.Header().Set("ETag", strconv.Quote("etag-"+strconv.Itoa(number)))
+		case http.MethodPost:
+			var complete struct {
+				Parts []struct {
+					PartNumber int
+					ETag       string
+				} `xml:"Part"`
+			}
+			if err := xml.NewDecoder(r.Body).Decode(&complete); err != nil || len(complete.Parts) != len(upload.parts) {
+				// Real S3 reports this with 200 and an Error document.
+				io.WriteString(w, `<Error><Code>InvalidPart</Code><Message>parts do not match</Message></Error>`)
+				return
+			}
+			var body []byte
+			for i, part := range complete.Parts {
+				if part.PartNumber != i+1 || part.ETag != strconv.Quote("etag-"+strconv.Itoa(i+1)) {
+					io.WriteString(w, `<Error><Code>InvalidPart</Code></Error>`)
+					return
+				}
+				body = append(body, upload.parts[part.PartNumber]...)
+			}
+			f.objects[key] = fakeObject{body, upload.contentType, time.Now().UTC().Truncate(time.Second)}
+			delete(f.uploads, query.Get("uploadId"))
+			io.WriteString(w, `<CompleteMultipartUploadResult><Key>`+key+`</Key></CompleteMultipartUploadResult>`)
+		case http.MethodDelete:
+			delete(f.uploads, query.Get("uploadId"))
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
 	case r.Method == http.MethodPut:
 		if r.ContentLength < 0 {
 			w.WriteHeader(http.StatusLengthRequired)
@@ -163,7 +228,7 @@ func (f *fakeS3) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func newFakeS3(t *testing.T, virtual bool) (*fakeS3, *httptest.Server) {
-	f := &fakeS3{t: t, creds: sigCredentials{accessKey: "AKID", secretKey: "secret", region: "eu-central-1"}, bucket: "media", virtual: virtual, objects: map[string]fakeObject{}}
+	f := &fakeS3{t: t, creds: sigCredentials{accessKey: "AKID", secretKey: "secret", region: "eu-central-1"}, bucket: "media", virtual: virtual, objects: map[string]fakeObject{}, uploads: map[string]*fakeUpload{}}
 	server := httptest.NewServer(f)
 	t.Cleanup(server.Close)
 	return f, server
@@ -260,31 +325,130 @@ func TestS3URLsAndErrors(t *testing.T) {
 	}
 }
 
-func TestSizedSpoolsUnknownReaders(t *testing.T) {
+func TestKnownSize(t *testing.T) {
 	file, _ := os.CreateTemp(t.TempDir(), "x")
 	file.WriteString("0123456789")
 	file.Seek(4, io.SeekStart)
-	if r, n, cleanup, err := sized(file, 0); err != nil || n != 6 || r != io.Reader(file) {
-		t.Errorf("seekable = %d, %v", n, err)
-	} else {
-		cleanup()
+	if n, ok := knownSize(file, 0); !ok || n != 6 {
+		t.Errorf("seekable = %d, %v", n, ok)
 	}
-	pr, pw := io.Pipe()
-	go func() { pw.Write([]byte("streamed")); pw.Close() }()
-	r, n, cleanup, err := sized(pr, 0)
-	if err != nil || n != 8 {
-		t.Fatalf("pipe = %d, %v", n, err)
+	if n, ok := knownSize(strings.NewReader("abc"), 0); !ok || n != 3 {
+		t.Errorf("strings.Reader = %d, %v", n, ok)
 	}
-	spooled := r.(*os.File).Name()
-	body, _ := io.ReadAll(r)
-	cleanup()
-	if string(body) != "streamed" {
-		t.Errorf("spooled = %q", body)
+	if n, ok := knownSize(io.LimitReader(strings.NewReader("abc"), 9), 7); !ok || n != 7 {
+		t.Errorf("explicit size = %d, %v", n, ok)
 	}
-	if _, err := os.Stat(spooled); !os.IsNotExist(err) {
-		t.Error("spool file left behind")
+	pr, _ := io.Pipe()
+	if _, ok := knownSize(pr, 0); ok {
+		t.Error("pipe reported a size")
 	}
 }
+
+// onlyReader hides every interface but io.Reader, as a network body does.
+type onlyReader struct{ io.Reader }
+
+// failingReader returns its data, then err.
+type failingReader struct {
+	data []byte
+	err  error
+}
+
+func (r *failingReader) Read(p []byte) (int, error) {
+	if len(r.data) == 0 {
+		return 0, r.err
+	}
+	n := copy(p, r.data)
+	r.data = r.data[n:]
+	return n, nil
+}
+
+func TestS3Multipart(t *testing.T) {
+	fake, server := newFakeS3(t, false)
+	disk, err := NewS3(S3Config{Bucket: "media", Region: "eu-central-1", Endpoint: server.URL, PathStyle: true, AccessKeyID: "AKID", SecretAccessKey: "secret"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	disk.partSize = 1000 // below S3's minimum, to keep the test small
+	ctx := context.Background()
+	data := make([]byte, 3500)
+	for i := range data {
+		data[i] = byte(i % 251)
+	}
+	stored := func(key string) []byte {
+		fake.mu.Lock()
+		defer fake.mu.Unlock()
+		return fake.objects[key].body
+	}
+	cases := []struct {
+		name string
+		body io.Reader
+		opts PutOptions
+		size int
+	}{
+		{"known.bin", bytes.NewReader(data), PutOptions{}, 3500},
+		{"unknown.bin", onlyReader{bytes.NewReader(data)}, PutOptions{}, 3500},
+		{"exact.bin", onlyReader{bytes.NewReader(data[:3000])}, PutOptions{}, 3000},
+		{"sized.bin", onlyReader{bytes.NewReader(data[:2001])}, PutOptions{Size: 2001}, 2001},
+		{"single.bin", onlyReader{bytes.NewReader(data[:1000])}, PutOptions{}, 1000},
+		{"empty.bin", onlyReader{strings.NewReader("")}, PutOptions{}, 0},
+	}
+	for _, c := range cases {
+		if err := disk.Put(ctx, c.name, c.body, c.opts); err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if got := stored(c.name); !bytes.Equal(got, data[:c.size]) {
+			t.Errorf("%s: stored %d bytes, want %d", c.name, len(got), c.size)
+		}
+	}
+	if info, _ := disk.Stat(ctx, "known.bin"); info.ContentType != "application/octet-stream" {
+		t.Errorf("content type = %q", info.ContentType)
+	}
+
+	failures := []struct {
+		name string
+		put  func() error
+	}{
+		{"part fails", func() error {
+			fake.mu.Lock()
+			fake.failPart = 2
+			fake.mu.Unlock()
+			defer func() { fake.mu.Lock(); fake.failPart = 0; fake.mu.Unlock() }()
+			return disk.Put(ctx, "failed.bin", bytes.NewReader(data), PutOptions{})
+		}},
+		{"reader fails", func() error {
+			return disk.Put(ctx, "failed.bin", &failingReader{data[:1500], errors.New("connection reset")}, PutOptions{})
+		}},
+		{"reader is short", func() error {
+			return disk.Put(ctx, "failed.bin", onlyReader{bytes.NewReader(data[:1500])}, PutOptions{Size: 3500})
+		}},
+		{"context cancelled", func() error {
+			ctx, cancel := context.WithCancel(ctx)
+			r := &failingReader{data[:1500], nil}
+			r.err = errors.New("unreachable")
+			reader := io.MultiReader(r, readerFunc(func([]byte) (int, error) { cancel(); return 0, ctx.Err() }))
+			return disk.Put(ctx, "failed.bin", reader, PutOptions{})
+		}},
+	}
+	for _, f := range failures {
+		if err := f.put(); err == nil {
+			t.Errorf("%s: Put succeeded", f.name)
+		}
+		fake.mu.Lock()
+		left, object := len(fake.uploads), fake.objects["failed.bin"].body
+		fake.mu.Unlock()
+		if left != 0 || object != nil {
+			t.Errorf("%s: %d unfinished uploads and object %v left behind", f.name, left, object != nil)
+		}
+	}
+
+	if _, err := NewS3(S3Config{Bucket: "b", Region: "r", AccessKeyID: "a", SecretAccessKey: "s", PartSize: 1 << 20}); err == nil {
+		t.Error("NewS3 accepted a 1 MiB part size")
+	}
+}
+
+type readerFunc func([]byte) (int, error)
+
+func (f readerFunc) Read(p []byte) (int, error) { return f(p) }
 
 // TestS3Integration runs the disk tests against a real S3-compatible service
 // when GOLAR_TEST_S3_ENDPOINT is set, such as Versity Gateway in CI or MinIO:
@@ -332,4 +496,59 @@ func TestS3Integration(t *testing.T) {
 	if resp.StatusCode != 200 || string(body) != "presigned" {
 		t.Errorf("presigned GET = %d %q", resp.StatusCode, body)
 	}
+
+	// Multipart: 11 MiB of unknown length in 5 MiB parts, the S3 minimum.
+	disk.partSize = minS3PartSize
+	large := make([]byte, 11<<20)
+	for i := range large {
+		large[i] = byte(i % 251)
+	}
+	if err := disk.Put(ctx, "large.bin", onlyReader{bytes.NewReader(large)}, PutOptions{}); err != nil {
+		t.Fatalf("multipart Put: %v", err)
+	}
+	reader, err := disk.Get(ctx, "large.bin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := io.ReadAll(reader)
+	reader.Close()
+	if err != nil || !bytes.Equal(got, large) {
+		t.Errorf("multipart Get = %d bytes, %v", len(got), err)
+	}
+	failing := &failingReader{large[:6<<20], errors.New("connection reset")}
+	if err := disk.Put(ctx, "failed.bin", failing, PutOptions{}); err == nil {
+		t.Error("failed multipart Put succeeded")
+	}
+	if uploads := unfinishedUploads(t, disk); len(uploads) != 0 {
+		t.Errorf("unfinished uploads left behind: %v", uploads)
+	}
+	if _, err := disk.Stat(ctx, "failed.bin"); !errors.Is(err, ErrNotExist) {
+		t.Errorf("failed upload created an object: %v", err)
+	}
+}
+
+// unfinishedUploads lists the multipart uploads in progress under the
+// disk's prefix.
+func unfinishedUploads(t *testing.T, disk *S3) []string {
+	t.Helper()
+	u := disk.bucketURL("")
+	u.RawQuery = canonicalQuery(url.Values{"uploads": {""}, "prefix": {disk.config.Prefix + "/"}})
+	resp, err := disk.do(context.Background(), http.MethodGet, u, nil, 0, nil)
+	if err != nil {
+		t.Fatalf("list multipart uploads: %v", err)
+	}
+	defer resp.Body.Close()
+	var result struct {
+		Uploads []struct {
+			Key string `xml:"Key"`
+		} `xml:"Upload"`
+	}
+	if err := xml.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("list multipart uploads: %v", err)
+	}
+	var keys []string
+	for _, upload := range result.Uploads {
+		keys = append(keys, upload.Key)
+	}
+	return keys
 }

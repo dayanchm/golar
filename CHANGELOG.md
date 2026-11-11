@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Storage:** `S3` uploads larger than `S3Config.PartSize` (16 MiB by
+  default), or of unknown length, as multipart uploads, so objects are no
+  longer limited to 5 GiB. Parts are streamed with at most one held in
+  memory, and a failed or cancelled upload is aborted.
+
+### Changed
+
+- `S3.Put` no longer spools readers of unknown length to a temporary file.
+
+### Fixed
+
+- `S3.Put` of an empty file sent a chunked request, which S3 rejects.
+
 ## v0.8.0 — 2026-11-10
 
 Covers the v0.6.0, v0.7.0 and v0.8.0 milestones, which are released together:

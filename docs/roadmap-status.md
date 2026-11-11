@@ -74,8 +74,6 @@ Known limitations:
 
 Known limitations:
 
-- S3 uploads are single PUTs, so objects are limited to 5 GiB; there is no
-  multipart upload yet.
 - Visibility is per disk; S3 object ACLs are not managed.
 - `Stream` has no Range support for S3; redirect to `TemporaryURL` instead.
 
@@ -101,6 +99,6 @@ Phases 1 to 3 (#57, #58, #59 and #64) were released together as v0.8.0.
 1. Phase 4: queue (#65), events (#66) and notifications (#67).
 2. Phase 5: `golar mcp` (#68). The rest of the phase is not yet scoped.
 
-The known limitations above are tracked as #69 (S3 multipart uploads), #70
-(reloading Go code in `golar serve`), #71 (`make:frontend` editing bootstrap)
-and #72 (embedding the frontend build).
+S3 multipart uploads (#69) are done. The remaining known limitations are
+tracked as #70 (reloading Go code in `golar serve`), #71 (`make:frontend`
+editing bootstrap) and #72 (embedding the frontend build).

@@ -91,11 +91,20 @@ disk, err := storage.NewS3(storage.S3Config{
 | Cloudflare R2 | `Endpoint: "https://<account>.r2.cloudflarestorage.com"`, `Region: "auto"` |
 | DigitalOcean Spaces | `Endpoint: "https://<region>.digitaloceanspaces.com"`, `Region: "<region>"` |
 
-`SessionToken` supports temporary credentials. `Put` streams readers of known
-length (`PutOptions.Size`, or files, `bytes.Reader` and `strings.Reader`)
-straight to S3; other readers are spooled to a temporary file, never to memory.
-A single upload is limited to 5 GiB (`storage.MaxS3Object`). `Get` streams
-the object body. `List` follows S3 pagination. `TemporaryURL` returns a
+`SessionToken` supports temporary credentials. `Put` streams uploads up to
+`PartSize` (16 MiB by default) in a single `PUT`. Larger uploads, and readers
+whose length is unknown, use a multipart upload: parts are sent one after
+another, and at most one part is held in memory. A length is known from
+`PutOptions.Size` or from files, `bytes.Reader` and `strings.Reader`; for
+those, parts grow as needed to stay within S3's 10,000 parts, up to the
+5 TiB object limit. Readers of unknown length are limited to 10,000 parts
+(156 GiB with the default part size), so pass `PutOptions.Size` or raise
+`PartSize` for larger streams.
+
+If a multipart upload fails or its context is cancelled, `Put` aborts it so
+no parts are left behind. A process that dies mid-upload cannot abort, so add
+an `AbortIncompleteMultipartUpload` lifecycle rule to the bucket to remove
+those parts after a few days. `Get` streams the object body. `List` follows S3 pagination. `TemporaryURL` returns a
 presigned `GET` URL without contacting S3.
 
 For public disks, `URL` returns `PublicURL` (such as a CDN) or the bucket URL.
