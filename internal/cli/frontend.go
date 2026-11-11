@@ -45,7 +45,7 @@ func frontendReady(root string) error {
 // server gets VITE_DEV_SERVER_URL so pages load assets from Vite; Vite gets
 // GOLAR_BACKEND_URL for its /api proxy. When either process exits, the other
 // is stopped; Ctrl+C stops both.
-func (c *CLI) serveWithVite(ctx context.Context, root string, env []string, binary, address string, vitePort int) error {
+func (c *CLI) serveWithVite(ctx context.Context, root string, env []string, serve func(context.Context, []string) error, address string, vitePort int, reloading string) error {
 	if vitePort < 1 || vitePort > 65535 {
 		return fmt.Errorf("invalid --vite-port %d", vitePort)
 	}
@@ -72,9 +72,9 @@ func (c *CLI) serveWithVite(ctx context.Context, root string, env []string, bina
 		results <- result{"Vite dev server", err}
 	}()
 	go func() {
-		results <- result{"server", c.run(runCtx, root, goEnv, c.Out, binary, "--addr", address)}
+		results <- result{"server", serve(runCtx, goEnv)}
 	}()
-	fmt.Fprintf(c.Out, "Serving on %s with Vite on %s (Ctrl+C to stop)\n", address, viteURL)
+	fmt.Fprintf(c.Out, "Serving on %s with Vite on %s%s (Ctrl+C to stop)\n", address, viteURL, reloading)
 	first := <-results
 	cancel()
 	<-results

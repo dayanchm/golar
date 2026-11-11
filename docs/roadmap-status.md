@@ -52,7 +52,6 @@ Known limitations:
 
 - `golar make:frontend` cannot edit `internal/bootstrap/app.go`; it prints
   the lines to add.
-- `golar serve` reloads the frontend, not Go code.
 - npm is the only package manager the CLI runs.
 - Generated binaries read `frontend/dist` from disk; embedding is documented
   but not generated.
