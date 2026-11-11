@@ -111,7 +111,7 @@ func main() {
 golar new my-app --interactive   # prompts for every option
 golar routes                     # lists the application's registered routes
 golar doctor                     # checks files, dependencies, tools and configuration
-golar serve --addr :8080         # builds and runs the app; also runs Vite for frontends
+golar serve --addr :8080         # runs the app, restarts it on Go changes, and runs Vite for frontends
 golar build                      # npm run build, then go build into bin/server
 golar make:migration create_posts_table
 golar make:request StorePost     # app/requests/store_post_request.go
@@ -132,9 +132,10 @@ golar migrate                    # also migrate:status, :rollback, :reset, :refr
 `golar new` prompts on a terminal; `--no-interactive` (or `--yes`) uses defaults
 and flags for scripts. It validates every file before writing and refuses
 existing destinations, including empty directories and symlinks. It does not
-download dependencies or initialize Git. For projects with a frontend,
-`golar serve` runs the Vite dev server alongside Go for hot reloading; Go code
-changes still need a restart.
+download dependencies or initialize Git. `golar serve` rebuilds and restarts the
+server when Go files, templates, `go.mod` or `.env` change; a compile error is
+printed and the running server stays up. `--no-reload` turns this off. For
+projects with a frontend, it also runs the Vite dev server for hot reloading.
 
 ### Generated projects
 

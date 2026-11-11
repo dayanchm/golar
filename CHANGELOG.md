@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **CLI:** `golar serve` watches Go files, templates, `go.mod`, `go.sum` and
+  `.env`, rebuilds on change and restarts the server once the build succeeds.
+  A compile error is printed and the running server keeps serving; a crashed
+  server restarts after the next change. `--no-reload` turns it off.
+
 ## v0.8.0 — 2026-11-10
 
 Covers the v0.6.0, v0.7.0 and v0.8.0 milestones, which are released together:

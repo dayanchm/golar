@@ -27,6 +27,8 @@ type CLI struct {
 	Out, Err io.Writer
 	Dir      string
 	run      func(context.Context, string, []string, io.Writer, ...string) error
+	// reloadEvery overrides how often golar serve looks for changes.
+	reloadEvery time.Duration
 }
 
 func Run(ctx context.Context, args []string, in io.Reader, out, errOut io.Writer) error {
@@ -77,7 +79,7 @@ func (c *CLI) help() {
                    [--frontend none|react|vue|svelte] [--auth none|token|session] [--docker]
                    [--module path] [--interactive | --no-interactive] [--dir parent]
                    [--framework-dir path | --framework-version version]
-  golar serve [--dir project] [--addr :8080] [--no-vite] [--vite-port 5173]
+  golar serve [--dir project] [--addr :8080] [--no-reload] [--no-vite] [--vite-port 5173]
   golar routes [--dir project]
   golar doctor [--dir project]
   golar make:migration <name> [--dir project]
@@ -265,10 +267,11 @@ func (c *CLI) projectCommand(ctx context.Context, name string, args []string) er
 	flags.SetOutput(c.Err)
 	root := flags.String("dir", c.Dir, "project directory")
 	var addr *string
-	var noVite *bool
+	var noVite, noReload *bool
 	var vitePort *int
 	if name == "serve" {
 		addr = flags.String("addr", "", "listen address override")
+		noReload = flags.Bool("no-reload", false, "do not rebuild and restart the server when Go files change")
 		noVite = flags.Bool("no-vite", false, "do not start the Vite dev server")
 		vitePort = flags.Int("vite-port", 5173, "Vite dev server port")
 	}
@@ -322,11 +325,21 @@ func (c *CLI) projectCommand(ctx context.Context, name string, args []string) er
 	if *addr != "" {
 		address = *addr
 	}
-	if config.Frontend != "none" && !*noVite {
-		return c.serveWithVite(ctx, *root, env, binary, address, *vitePort)
+	serve := func(ctx context.Context, env []string) error {
+		if *noReload {
+			return c.run(ctx, *root, env, c.Out, binary, "--addr", address)
+		}
+		return c.serveReload(ctx, *root, env, binary, address)
 	}
-	fmt.Fprintf(c.Out, "Serving %s on %s (Ctrl+C to stop)\n", config.Name, address)
-	return c.run(ctx, *root, env, c.Out, binary, "--addr", address)
+	reloading := ""
+	if !*noReload {
+		reloading = ", reloading on Go changes"
+	}
+	if config.Frontend != "none" && !*noVite {
+		return c.serveWithVite(ctx, *root, env, serve, address, *vitePort, reloading)
+	}
+	fmt.Fprintf(c.Out, "Serving %s on %s%s (Ctrl+C to stop)\n", config.Name, address, reloading)
+	return serve(ctx, env)
 }
 
 func (c *CLI) command(ctx context.Context, dir string, env []string, out io.Writer, args ...string) error {

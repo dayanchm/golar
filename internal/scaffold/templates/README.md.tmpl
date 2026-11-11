@@ -11,6 +11,8 @@ golar serve
 Without the CLI: `go run ./cmd/server`. The backend defaults to :8080.
 `golar routes` lists actual registered routes; `golar doctor` checks project tools
 and files. `golar serve --addr :9000` overrides the address. Stop with Ctrl+C.
+`golar serve` rebuilds and restarts the server when Go files, templates or
+`.env` change, and keeps the running server when the build fails.
 
 Folders: app/handlers, app/models, routes, internal/bootstrap, internal/config,
 database/migrations, storage and tests. Add handlers in app/handlers and register

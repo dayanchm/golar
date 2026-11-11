@@ -42,7 +42,9 @@ golar serve
 ```
 
 `golar serve` builds and starts the Go server and runs `npm run dev` in
-`frontend` at the same time:
+`frontend` at the same time. Vite reloads frontend changes; Go changes rebuild
+the server, which restarts once the build succeeds (`--no-reload` turns this
+off). `frontend` is not watched for Go changes.
 
 | Variable | Set for | Value |
 | --- | --- | --- |
