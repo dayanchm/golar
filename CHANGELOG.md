@@ -14,6 +14,10 @@
 - **Events** (`events`): `Listen` registers typed listeners and `Dispatch`
   runs them in order, returning every failure joined; `ListenQueued` runs a
   listener as a queue job, so failures retry and end in failed job storage.
+- **Notifications** (`notify`): one notification to several channels with
+  `Notifier.Send`; `MailChannel` on any `mail.Mailer`, `DatabaseChannel`
+  with `List`, `UnreadCount`, `MarkRead`, `MarkAllRead` and `Delete`;
+  `Queued` delivers through the queue; custom channels implement `Channel`.
 - **Application:** `RunCommand` runs a function between the startup and
   shutdown hooks without serving HTTP.
 - **CLI and scaffold:** projects with a database get `app/jobs`,
