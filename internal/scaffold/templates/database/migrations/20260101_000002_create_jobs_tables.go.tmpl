@@ -1,0 +1,22 @@
+package migrations
+
+import (
+ "github.com/dayanchm/golar/database/migrations"
+ "github.com/dayanchm/golar/database/schema"
+ "github.com/dayanchm/golar/queue"
+)
+
+// CreateJobsTables creates the tables used by QUEUE_DRIVER=database.
+type CreateJobsTables struct{}
+
+func (CreateJobsTables) Up(s *schema.Schema) error {
+ if err:=s.Create(queue.JobsTable,queue.JobColumns);err!=nil{return err}
+ return s.Create(queue.FailedTable,queue.FailedColumns)
+}
+
+func (CreateJobsTables) Down(s *schema.Schema) error {
+ if err:=s.DropIfExists(queue.FailedTable);err!=nil{return err}
+ return s.DropIfExists(queue.JobsTable)
+}
+
+func init() {migrations.MustRegister("20260101_000002_create_jobs_tables",CreateJobsTables{})}

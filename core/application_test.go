@@ -240,3 +240,33 @@ func TestSetContextConfig(t *testing.T) {
 		}
 	}
 }
+
+func TestRunCommand(t *testing.T) {
+	app := New()
+	var order []string
+	app.OnStart(func(context.Context) error { order = append(order, "start"); return nil })
+	app.OnShutdown(func(context.Context) error { order = append(order, "shutdown"); return nil })
+	err := app.RunCommand(context.Background(), func(ctx context.Context) error {
+		order = append(order, "command")
+		return errors.New("done")
+	})
+	if err == nil || err.Error() != "done" || strings.Join(order, ",") != "start,command,shutdown" {
+		t.Fatalf("RunCommand = %v, order %v", err, order)
+	}
+	if err := app.RunCommand(context.Background(), func(context.Context) error { return nil }); err == nil {
+		t.Error("second run succeeded")
+	}
+
+	failing := New()
+	failing.OnStart(func(context.Context) error { return errors.New("no database") })
+	ran := false
+	if err := failing.RunCommand(context.Background(), func(context.Context) error { ran = true; return nil }); err == nil || ran {
+		t.Errorf("failed startup = %v, command ran %v", err, ran)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := New().RunCommand(ctx, func(ctx context.Context) error { <-ctx.Done(); return nil }); err != nil {
+		t.Errorf("cancelled = %v", err)
+	}
+}

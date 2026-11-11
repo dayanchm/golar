@@ -120,6 +120,25 @@ func (a *Application) RunContext(ctx context.Context, address ...string) error {
 	return errors.Join(err, a.stop(config))
 }
 
+// RunCommand runs fn without serving HTTP, for workers and other commands
+// that share the application's setup: startup hooks run first, fn runs until
+// it returns or ctx ends (including on SIGINT or SIGTERM, which cancel the
+// context passed to fn), then shutdown hooks run in reverse order.
+func (a *Application) RunCommand(ctx context.Context, fn func(context.Context) error) error {
+	if !a.started.CompareAndSwap(false, true) {
+		return errors.New("golar: application has already run")
+	}
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	for _, hook := range a.startup {
+		if err := hook(ctx); err != nil {
+			return errors.Join(err, a.stop(a.config))
+		}
+	}
+	err := fn(ctx)
+	return errors.Join(err, a.stop(a.config))
+}
+
 func (a *Application) stop(config Config) error {
 	timeout := config.ShutdownTimeout
 	if timeout <= 0 {

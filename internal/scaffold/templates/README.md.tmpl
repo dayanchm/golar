@@ -122,7 +122,16 @@ import (
 posts,err:=golar.Remember(ctx,cache.Store,"posts:latest",10*time.Minute,loadPosts)
 ```
 
-## Middleware
+{{if ne .Database "none"}}## Queue
+
+Register jobs in `app/jobs/jobs.go` and dispatch them with
+`golar.Dispatch(ctx,queue.Jobs,"example",jobs.Example{Message:"hi"})`, importing
+`golar "github.com/dayanchm/golar/queue"` and `{{.Module}}/internal/queue`.
+`QUEUE_DRIVER=sync` runs jobs as they are dispatched. For background jobs, run
+`golar migrate`, set `QUEUE_DRIVER=database` and start `golar queue:work` next to
+the server (in production, `bin/server --work`).
+
+{{end}}## Middleware
 
 internal/bootstrap/app.go adds request IDs, logging, panic recovery, security
 headers, a 10 MiB request body limit and gzip compression. Add

@@ -69,6 +69,14 @@ func TestTemplateMatrix(t *testing.T) {
 							if !strings.Contains(string(files[".env"]), "CACHE_DRIVER=memory") {
 								t.Error("cache driver missing from .env")
 							}
+							for _, path := range []string{"internal/queue/queue.go", "app/jobs/jobs.go", "database/migrations/20260101_000002_create_jobs_tables.go"} {
+								if _, ok := files[path]; ok != (db != "none") {
+									t.Errorf("queue file %s present = %v with database %s", path, ok, db)
+								}
+							}
+							if strings.Contains(string(files[".env"]), "QUEUE_DRIVER=sync") != (db != "none") || strings.Contains(string(files["cmd/server/main.go"]), `"work"`) != (db != "none") {
+								t.Error("queue wiring does not match the database choice")
+							}
 							for _, path := range []string{"internal/auth/auth.go", "app/models/user.go", "app/handlers/auth.go", "database/migrations/20260101_000000_create_users_table.go", "tests/auth_test.go"} {
 								if _, ok := files[path]; ok != (auth != "none") {
 									t.Errorf("auth choice ignored for %s", path)

@@ -1,19 +1,28 @@
 package main
 
 import (
- "flag"
+{{if ne .Database "none"}} "context"
+{{end}} "flag"
  "fmt"
  "log"
  "os"
  "{{.Module}}/internal/bootstrap"
-)
+{{if ne .Database "none"}} "{{.Module}}/internal/queue"
+{{end}})
 
 func main() {
  list:=flag.Bool("routes",false,"list registered routes without starting the server")
  addr:=flag.String("addr","","override listen address")
- flag.Parse()
+{{if ne .Database "none"}} work:=flag.Bool("work",false,"run queued jobs instead of serving HTTP (golar queue:work)")
+{{end}} flag.Parse()
  app,err:=bootstrap.New();if err!=nil{log.Fatal(err)}
  if *list {for _,route:=range app.Routes(){fmt.Printf("%s\t%s\n",route.Method,route.Path)};return}
+{{if ne .Database "none"}} if *work {
+  log.Printf("{{.Name}} working the queue")
+  if err=app.RunCommand(context.Background(),queue.Work);err!=nil{log.Fatal(err)}
+  return
+ }
+{{end}}
  address:=os.Getenv("APP_ADDR");if address==""{address=":8080"};if *addr!=""{address=*addr}
  log.Printf("{{.Name}} listening on %s",address)
  if err=app.Run(address);err!=nil{log.Fatal(err)}

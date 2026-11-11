@@ -190,6 +190,11 @@ func Render(options Options) (map[string][]byte, error) {
 		if relative == "database/migrations/20260101_000001_create_cache_table.go.tmpl" && o.Database == "none" {
 			return nil
 		}
+		// The queue's database driver and worker need a database.
+		if o.Database == "none" && (relative == "database/migrations/20260101_000002_create_jobs_tables.go.tmpl" ||
+			strings.HasPrefix(relative, "internal/queue/") || strings.HasPrefix(relative, "app/jobs/")) {
+			return nil
+		}
 		if o.Auth == "none" && (strings.HasPrefix(relative, "internal/auth/") || authFiles[relative]) {
 			return nil
 		}

@@ -7,7 +7,8 @@ import (
  "github.com/dayanchm/golar/http/middleware"
  "{{.Module}}/internal/cache"
  "{{.Module}}/internal/config"
- "{{.Module}}/routes"
+{{if ne .Database "none"}} "{{.Module}}/internal/queue"
+{{end}} "{{.Module}}/routes"
 {{if ne .Auth "none"}} "{{.Module}}/internal/auth"
  "github.com/dayanchm/golar/mail"{{end}}
 {{if eq .Template "fullstack"}} "github.com/dayanchm/golar/http/vite"
@@ -54,6 +55,7 @@ func build(db *database.DB{{if ne .Auth "none"}},mailer mail.Mailer{{end}}) (*go
 {{end}}{{if ne .Database "none"}} if db!=nil{
 {{if ne .Auth "none"}}  a.Init(db)
 {{end}}  if err:=cache.Init(db);err!=nil{return nil,err}
+  if err:=queue.Init(db);err!=nil{return nil,err}
   return app,nil
  }
  app.OnStart(func(ctx context.Context) error {
@@ -63,6 +65,7 @@ func build(db *database.DB{{if ne .Auth "none"}},mailer mail.Mailer{{end}}) (*go
 {{end}}{{if eq .Auth "session"}}  if err==nil{go a.PruneSessions(ctx)}
 {{end}}  if err==nil{err=cache.Init(db)}
   if err==nil{go cache.Prune(ctx)}
+  if err==nil{err=queue.Init(db)}
   return err
  })
  app.OnShutdown(func(context.Context) error {if db!=nil{return db.Close()};return nil})
