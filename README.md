@@ -455,6 +455,12 @@ Planned work is tracked in [GitHub milestones](https://github.com/dayanchm/golar
 v0.6.0 to v0.8.0 were released together as v0.8.0; see the
 [changelog](CHANGELOG.md).
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, checks and pull request
+conventions. Report vulnerabilities privately as described in
+[SECURITY.md](SECURITY.md).
+
 ## License
 
 Golar is released under the [MIT License](LICENSE).
