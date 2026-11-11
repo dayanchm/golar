@@ -50,12 +50,10 @@ Known limitations:
 
 Known limitations:
 
-- `golar make:frontend` cannot edit `internal/bootstrap/app.go`; it prints
-  the lines to add.
+- `golar make:frontend` updates only files unchanged since `golar new`; for
+  edited files it prints the lines to add.
 - `golar serve` reloads the frontend, not Go code.
 - npm is the only package manager the CLI runs.
-- Generated binaries read `frontend/dist` from disk; embedding is documented
-  but not generated.
 
 ## Phase 3 — v0.8.0: Storage and cache
 

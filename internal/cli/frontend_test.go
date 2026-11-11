@@ -240,8 +240,14 @@ func TestMakeFrontend(t *testing.T) {
 	if after.Mode() != before.Mode() {
 		t.Errorf("golar.yaml mode %v, was %v", after.Mode(), before.Mode())
 	}
-	if !strings.Contains(out.String(), "template: fullstack") || !strings.Contains(out.String(), "SPA(vite.PathPrefix") {
+	if !strings.Contains(out.String(), "template: fullstack") || !strings.Contains(out.String(), "Updated internal/bootstrap/app.go") {
 		t.Errorf("output = %q", out.String())
+	}
+	// The untouched bootstrap now matches what golar new generates for the
+	// new configuration.
+	want, _ := scaffold.Render(scaffold.Options{Name: "demo", Template: "fullstack", Frontend: "vue"})
+	if got, _ := os.ReadFile(filepath.Join(root, "internal", "bootstrap", "app.go")); string(got) != string(want["internal/bootstrap/app.go"]) {
+		t.Errorf("bootstrap was not wired:\n%s", got)
 	}
 	if err := c.Run(context.Background(), []string{"make:frontend", "react", "--dir", root}); err == nil || !strings.Contains(err.Error(), "already has") {
 		t.Fatalf("second frontend = %v", err)
@@ -255,8 +261,31 @@ func TestMakeFrontend(t *testing.T) {
 	if err := c.Run(context.Background(), []string{"make:frontend", "react", "--dir", web}); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), `{{vite_react_refresh}}{{vite "src/main.jsx"}}`) || !strings.Contains(out.String(), "web.Assets.Files") {
+	if !strings.Contains(out.String(), "Updated internal/bootstrap/app.go, web/render.go, web/templates/index.html") {
 		t.Errorf("web output = %q", out.String())
+	}
+	if page, _ := os.ReadFile(filepath.Join(web, "web", "templates", "index.html")); !strings.Contains(string(page), `{{vite "src/main.jsx"}}`) {
+		t.Errorf("page does not load the bundle:\n%s", page)
+	}
+
+	// Hand-edited files are never overwritten; the lines to add are printed.
+	custom, err := scaffold.Create(c.Dir, scaffold.Options{Name: "custom", Template: "web"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bootstrap := filepath.Join(custom, "internal", "bootstrap", "app.go")
+	edited, _ := os.ReadFile(bootstrap)
+	edited = append(edited, []byte("\n// my change\n")...)
+	os.WriteFile(bootstrap, edited, 0o644)
+	out.Reset()
+	if err := c.Run(context.Background(), []string{"make:frontend", "react", "--dir", custom}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(bootstrap); string(got) != string(edited) {
+		t.Error("an edited bootstrap was overwritten")
+	}
+	if !strings.Contains(out.String(), "internal/bootstrap/app.go changed since golar new") || !strings.Contains(out.String(), `{{vite_react_refresh}}{{vite "src/main.jsx"}}`) || !strings.Contains(out.String(), "web.Assets.Files") {
+		t.Errorf("edited output = %q", out.String())
 	}
 	if config, _ := project.Load(web); config.Template != "web" {
 		t.Errorf("web template changed to %s", config.Template)

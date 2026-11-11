@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Scaffold:** projects with a frontend get a `frontend` Go package whose
+  `FS` holds the build when compiled with `-tags golar_embed`. `golar build`
+  and the generated Dockerfile use the tag, so the binary serves the frontend
+  from any directory; `golar serve` and `go run` still read `frontend/dist`
+  from disk and need no build.
+- **CLI:** `golar make:frontend` wires the frontend into
+  `internal/bootstrap/app.go` and, for Web projects, `web/render.go` and
+  `web/templates/index.html`. Files edited since `golar new` are never
+  overwritten; the lines to add to them are printed instead.
+
 ## v0.8.0 — 2026-11-10
 
 Covers the v0.6.0, v0.7.0 and v0.8.0 milestones, which are released together:

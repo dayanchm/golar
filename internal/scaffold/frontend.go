@@ -118,6 +118,37 @@ async function greet() {
 		entry = "/src/main.jsx"
 	}
 	files["frontend/index.html"] = []byte(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>` + d.Name + `</title></head><body><div id="app"></div><script type="module" src="` + entry + `"></script></body></html>`)
+	files["frontend/frontend.go"] = []byte(`// Package frontend gives the server the built frontend. golar build compiles
+// it into the binary with -tags golar_embed; other builds, such as golar serve
+// and go run, read frontend/dist from disk, so development needs no build.
+package frontend
+
+import "io/fs"
+
+// FS holds the contents of dist in binaries built with -tags golar_embed, and
+// is nil otherwise.
+var FS fs.FS
+`)
+	files["frontend/embed.go"] = []byte(`//go:build golar_embed
+
+package frontend
+
+import (
+	"embed"
+	"io/fs"
+)
+
+//go:embed all:dist
+var dist embed.FS
+
+func init() {
+	sub, err := fs.Sub(dist, "dist")
+	if err != nil {
+		panic(err)
+	}
+	FS = sub
+}
+`)
 	files["frontend/src/style.css"] = []byte(`body{font-family:system-ui,sans-serif;background:#f4f5f7;color:#17202a;margin:0}main{max-width:640px;margin:10vh auto;padding:2rem;background:white;border-radius:12px}button,input{font:inherit;padding:.65rem;margin:.5rem 0}label{display:block}input{display:block}button{cursor:pointer}`)
 	return nil
 }

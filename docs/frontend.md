@@ -32,8 +32,12 @@ golar make:frontend svelte
 ```
 
 It writes `frontend/`, sets `frontend:` in `golar.yaml` (an `api` project
-becomes `fullstack`) and prints the lines to add to `internal/bootstrap/app.go`.
-It refuses projects that already have a frontend or a `frontend/` directory.
+becomes `fullstack`) and wires the frontend in: `internal/bootstrap/app.go`
+and, for `web` projects, `web/render.go` and `web/templates/index.html` are
+replaced with what `golar new` generates for a project with that frontend. A
+file is only replaced when it is unchanged since `golar new`; a file you
+edited is left alone, and the command prints the lines to add to it. It
+refuses projects that already have a frontend or a `frontend/` directory.
 
 ## Development
 
@@ -68,24 +72,28 @@ golar build --no-frontend        # skip npm
 ```
 
 Vite writes `frontend/dist` with hashed file names and
-`.vite/manifest.json`. The server reads `frontend/dist` relative to its working
-directory, so run it from the project directory or deploy `frontend/dist` next
-to it. Built files under `assets/` are sent with
+`.vite/manifest.json`. `golar build` then compiles the server with
+`-tags golar_embed`, which embeds `frontend/dist` through the generated
+`frontend` package, so `bin/server` serves the frontend from any directory.
+Other builds, such as `golar serve`, `go run` and a plain `go build`, leave
+`frontend.FS` nil and read `frontend/dist` from the working directory, so
+development needs no build. Built files under `assets/` are sent with
 `Cache-Control: public, max-age=31536000, immutable`; everything else, including
 `index.html`, with `Cache-Control: no-cache`. The manifest itself is not served.
 
-To ship a single binary, embed the build and pass it to the integration:
+Generated projects pass the embedded build to the integration:
 
 ```go
-//go:embed all:frontend/dist
-var dist embed.FS
+import "example.com/app/frontend"
 
-sub, _ := fs.Sub(dist, "frontend/dist")
-assets := vite.New(vite.Config{FS: sub})
+assets := vite.New(vite.Config{FS: frontend.FS}) // nil FS reads frontend/dist
 ```
 
-Run `golar build` (or `npm run build`) before `go build`, since `go:embed`
-needs the files at compile time.
+To build the binary yourself, run `npm run build` in `frontend` first, since
+`go:embed` needs the files at compile time, then
+`go build -tags golar_embed ./cmd/server`. The generated Dockerfile does the
+same. Projects created before this have no `frontend/embed.go`; `golar build`
+then builds without the tag and the binary reads `frontend/dist` from disk.
 
 ## The `vite` package
 
