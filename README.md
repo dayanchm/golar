@@ -117,6 +117,7 @@ golar make:migration create_posts_table
 golar make:request StorePost     # app/requests/store_post_request.go
 golar make:frontend react        # adds a Vite frontend to a project without one
 golar migrate                    # also migrate:status, :rollback, :reset, :refresh, --pretend
+golar mcp                        # read-only MCP server for coding agents (docs/mcp.md)
 ```
 
 | `golar new` option | Choices | Default |
@@ -450,7 +451,7 @@ Planned work is tracked in [GitHub milestones](https://github.com/dayanchm/golar
 | v0.7.0 | Vite integration, `golar serve` with Vite, `golar build` | released in v0.8.0 |
 | v0.8.0 | File storage (local and S3) and cache | released in v0.8.0 |
 | v0.9.0 | Queue, events and notifications | planned |
-| v0.10.0 | AI integration, starting with `golar mcp` for coding agents | planned |
+| v0.10.0 | AI integration: `golar mcp` gives coding agents routes, schema and models | merged, unreleased |
 
 v0.6.0 to v0.8.0 were released together as v0.8.0; see the
 [changelog](CHANGELOG.md).
