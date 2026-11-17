@@ -11,6 +11,9 @@
   `Failed`, `Retry` and `Forget`. `Work` runs jobs with a concurrency limit,
   never hands one job to two workers, and lets running jobs finish on
   shutdown.
+- **Events** (`events`): `Listen` registers typed listeners and `Dispatch`
+  runs them in order, returning every failure joined; `ListenQueued` runs a
+  listener as a queue job, so failures retry and end in failed job storage.
 - **Application:** `RunCommand` runs a function between the startup and
   shutdown hooks without serving HTTP.
 - **CLI and scaffold:** projects with a database get `app/jobs`,
